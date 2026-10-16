@@ -1,0 +1,26 @@
+# Build (CMake / Ninja)
+build/
+out/
+cmake-build-*/
+CMakeUserPresets.json
+
+# Qt generated files
+*_autogen/
+*.qmlc
+*.jsc
+*.qm
+
+# Qt Creator / IDEs
+CMakeLists.txt.user
+CMakeLists.txt.user.*
+*.autosave
+aqtinstall.log
+.cache/
+.vscode/
+
+# ---- AI's folders and files ----
+.claude/
+.opencode/
+
+# Local working material, never published
+tmp/

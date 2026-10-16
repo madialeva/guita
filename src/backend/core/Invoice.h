@@ -1,0 +1,22 @@
+#pragma once
+#include <cstdint>
+#include <optional>
+#include <string>
+
+// Amounts are integer cents: never floating point for money. The database
+// stores them as numeric(12,2); InvoiceStore converts between both.
+using Cents = std::int64_t;
+
+struct NewInvoice {
+    std::string customer;
+    std::optional<std::string> customerTaxId;
+    Cents totalCents = 0;
+};
+
+struct Invoice {
+    long long id = 0;
+    int version = 0;          // optimistic locking: UPDATE ... WHERE id = $1 AND version = $2
+    std::string customer;
+    std::optional<std::string> customerTaxId;
+    Cents totalCents = 0;
+};

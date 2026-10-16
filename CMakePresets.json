@@ -1,0 +1,34 @@
+{
+  "version": 6,
+  "configurePresets": [
+    {
+      "name": "native",
+      "displayName": "Native (Qt 6.12 + backend libraries in ~/software)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/native",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_PREFIX_PATH": "$env{HOME}/software/Qt/6.12.0/gcc_64;$env{HOME}/software/libpqxx-8.0.2;$env{HOME}/software/cpp-httplib-0.61.0;$env{HOME}/software/glaze-9.0.0"
+      }
+    },
+    {
+      "name": "wasm",
+      "displayName": "WebAssembly (Qt 6.12 wasm_singlethread + emsdk 5.0.5)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/wasm",
+      "toolchainFile": "$env{HOME}/software/Qt/6.12.0/wasm_singlethread/lib/cmake/Qt6/qt.toolchain.cmake",
+      "environment": {
+        "EMSDK": "$env{HOME}/software/emsdk",
+        "EMSDK_PYTHON": "$env{HOME}/.local/bin/python3.12"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "QT_HOST_PATH": "$env{HOME}/software/Qt/6.12.0/gcc_64"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "native", "configurePreset": "native" },
+    { "name": "wasm", "configurePreset": "wasm" }
+  ]
+}

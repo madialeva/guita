@@ -1,0 +1,9 @@
+* text=auto eol=lf
+
+# Binary artifacts must never be line-ending normalized.
+*.qm binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.svg binary
+*.wasm binary

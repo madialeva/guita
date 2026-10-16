@@ -1,0 +1,268 @@
+# AGENTS.md — Guita
+
+## Project
+
+Guita is a proof of concept for a C++-only architecture where a single code
+base produces a Qt Quick (QML) client that runs both as a WebAssembly web app
+and as a native desktop application, talking HTTP/JSON to a C++ backend over
+PostgreSQL built from small libraries instead of a framework: cpp-httplib
+(embedded HTTP server), libpqxx (PostgreSQL, no ORM) and glaze (JSON). The technical design is described in
+`docs/architecture.md`; consult it before changing how the pieces fit together
+and keep it up to date when they change.
+
+| Mode | Client | Backend |
+|---|---|---|
+| Web | Qt/QML compiled to WebAssembly | remote `server`, which also serves the WASM files |
+| Desktop connected | native Qt/QML | remote `server` (`API_URL`) |
+| Desktop standalone | native Qt/QML (`--standalone`) | backend embedded in the client process, `127.0.0.1` with random port and token |
+
+Principles that every change must keep:
+
+- The client always talks HTTP/JSON to the backend and never knows whether it
+  is remote or embedded.
+- All business logic lives in the backend (`src/backend/`); the client only
+  presents and validates for user experience. The backend repeats every
+  critical validation: the WASM client is in the user's hands.
+- The backend never depends on Qt and the client never accesses the database.
+- Same engine (PostgreSQL), same SQL and same migrations in every mode.
+
+Use C++23, Qt Quick (QML), cpp-httplib, libpqxx 8, glaze, PostgreSQL, CMake,
+Ninja and GCC. The backend uses no framework and no ORM. Qt is
+6.12 LTS everywhere (desktop kit for the native client, `wasm_singlethread` kit
+for the web client, both from `~/software/Qt`; CMake requires 6.12): never add
+code paths or workarounds for other Qt versions, and never build against the
+system Qt. Do not introduce Qt Widgets or new production dependencies without
+an approved OpenSpec change.
+
+## Source layout
+
+The repository root holds only project files (CMake, presets, AGENTS.md,
+README), `scripts/`, `docs/`, `openspec/` (versioned and public, see Working
+preferences), and the git-ignored `build/` and `tmp/` (the user's local
+working material: never publish it nor reference it from published files). All
+source code lives in `src/`, grouped by side of the architecture:
+
+```text
+src/
+├── backend/          backend, native only (never built for WASM)
+│   ├── core/         plain C++ + libpqxx: entities, stores (SQL), pool, migrations, services
+│   ├── api/          HTTP server, REST routes and Backend, shared by server and client
+│   └── server/       server executable
+└── client/           Qt/QML client (native + WASM): API connection, repositories, views
+    └── translations/ Qt Linguist catalogs (English source)
+scripts/              dependency setup, WASM build, server launcher, database creation SQL
+docs/                 technical documentation (architecture.md)
+```
+
+Dependencies flow `client -> api -> core`, and the client reaches the backend
+only through `backend/api/Backend.h`, linking `api` solely for standalone mode.
+The root `CMakeLists.txt` adds `src/backend` only when not building for
+Emscripten.
+
+CMake mirrors the layers: `src/backend/CMakeLists.txt` defines `core` (static,
+libpqxx), `api` (static, cpp-httplib + glaze, both private) and the `server`
+executable; `src/client/CMakeLists.txt` defines the `client` executable, which
+backs the `Guita` QML module (QML views plus the C++ types they use) next to
+its QML files, so the module needs no per-directory `qmldir` (Qt policy
+QTP0004). Executables are written to `build/<preset>/bin`.
+
+## Backend
+
+- No ORM: all the SQL of an aggregate lives in its store (`InvoiceStore`),
+  which works inside the caller's transaction and maps rows to plain structs.
+  Services hold the business rules and never contain SQL; they open their
+  transactions with `Database::inTransaction()`.
+- Every statement is a prepared statement registered in the store's static
+  `prepare()` and listed in `prepareStatements()` (`core/Statements.cpp`);
+  the backend prepares them at startup so that SQL errors fail fast.
+- `pqxx::connection` is not thread-safe and the HTTP server handles requests
+  concurrently: connections come from the `Database` pool, one per transaction.
+- Money is never floating point: amounts are integer cents (`Cents`,
+  `std::int64_t`) in C++ and in the JSON API (`totalCents`), and
+  `numeric(12,2)` in PostgreSQL; stores convert in SQL. The client parses typed
+  amounts as text and keeps cents in a `double` (QML `int` is 32-bit).
+- Optimistic locking is explicit: updates check and increment `version`
+  (`WHERE id = $1 AND version = $2`) and treat zero affected rows as a conflict.
+- REST routes are registered per resource (`addInvoiceRoutes()`) and wrapped
+  with `http::guarded()`. JSON shapes are plain structs serialized by glaze
+  reflection (member names = JSON field names); unknown fields are ignored.
+  Errors are `{"error": "..."}` with the proper status code (400 validation,
+  401 authentication, 405 method, 415 non-JSON body, 500 unexpected).
+- `backend/api/Backend.h` must not include cpp-httplib, libpqxx or glaze
+  (pimpl): the client only needs that interface to embed the backend.
+- Authentication is a shared Bearer token for now (random per launch in
+  standalone mode, `API_TOKEN` on the server, for development). Authentication
+  is pluggable through `Authorizer`: no identity provider is part of the
+  architecture. User authentication owned by the backend is pending.
+
+## QML and C++
+
+C++ types reach QML by declarative registration in the `Guita` module, never by
+context properties, `qmlRegister*` calls or objects injected from `main.cpp`:
+
+- Per-view objects (repositories, controllers) use `QML_ELEMENT` and are
+  instantiated by the view that owns them (`Main.qml` creates `InvoiceRepository`).
+- Application-wide services are `QML_SINGLETON` with a static `create()`
+  (`ApiConnection`). Qt prefers a default constructor over `create()`, so such
+  a class must not be default-constructible.
+- Views declare typed properties (`ApiConnection *connection` as a `REQUIRED`
+  property), never `var`, so `qmllint` checks every access. `client_qmllint`
+  must stay clean.
+- `main.cpp` only installs the translator, handles the command-line flags,
+  starts the embedded backend in standalone mode, configures `ApiConnection`
+  and loads `Main`; no wiring between C++ objects and views lives there.
+- Everything in the client is asynchronous (signals, callbacks): WASM forbids
+  blocking waits and nested `QEventLoop::exec()`.
+
+## OpenSpec
+
+OpenSpec is the default workflow for changes. For each change: create
+`proposal.md` and `design.md` (plus `tasks.md` and required `specs/` deltas),
+then STOP until the user approves proposal and design. Do not start
+implementing the tasks until then. Leave a compiling build for visual
+verification and archive only on user confirmation.
+
+This is not mandatory. If the programmer explicitly states in a change request
+that OpenSpec should not be used (or that the change should be made directly),
+skip the OpenSpec workflow and implement the change directly. The initial POC
+(v0.1.0) was built this way, without an OpenSpec change.
+
+Artifact language: prose in `proposal.md`, `design.md`, `tasks.md` and
+`specs/*.md` (motivation, decisions, requirement/scenario descriptions, etc.)
+is written in Spanish, except the fixed labels imposed by the OpenSpec skills,
+which stay in English as-is (`Why`, `What Changes`, `Capabilities`, `Impact`,
+`Context`, `Goals`/`Non-Goals`, `Decisions`, `Risks / Trade-offs`, `Migration
+Plan`, `Open Questions`, `Purpose`, `ADDED`/`MODIFIED`/`REMOVED`/`RENAMED
+Requirements`, `Requirement:`, `Scenario:`, `WHEN`/`THEN`/`AND`,
+`SHALL`/`MUST`). Code identifiers (classes, methods, packages) also stay in
+English inside the Spanish text. This is independent of the GitHub issues
+language (always English, see below).
+
+## Persistent compatibility
+
+The PostgreSQL schema is owned and versioned by this project through numbered
+migrations in `src/backend/core/Migrations.cpp`, applied at startup by both the server and
+standalone mode inside one transaction guarded by `pg_advisory_xact_lock`.
+Never edit a released migration; add a new one (one statement per migration).
+Table and column names are English `snake_case`; every table has a
+`bigserial` `id` and an integer `version` for optimistic locking. JSON field names of the REST API are
+English `camelCase`; treat them as a public contract once released.
+
+## Language and files
+
+Use English for source, identifiers, comments, CMake, scripts, technical docs
+(README, `docs/`), commits, and pull requests. GitHub issues and milestones:
+titles and descriptions always in English. OpenSpec artifacts and user
+conversation remain in Spanish.
+
+UI text must use `qsTr()` in QML and `tr()`/`QCoreApplication::translate()` in
+C++. English is the source language: `src/client/translations/guita_en.ts` is
+the source-language catalog Qt generates (only needed for plural forms) and
+`src/client/translations/guita_es.ts` must keep its current displayed text;
+refresh both with the `update_translations` target. Backend error messages are
+English and not translated yet.
+
+Text uses LF; never line-ending-normalize binaries such as `.qm` or images.
+
+## C++ includes
+
+Every `#include` uses angle brackets, never double quotes: Qt, library and
+system headers (`<QNetworkReply>`, `<pqxx/pqxx>`, `<httplib.h>`) and project headers resolved from
+`src/` (`<backend/core/InvoiceService.h>`, `<backend/api/Backend.h>`,
+`<client/ApiConnection.h>`). Never use relative include paths or bare project
+file names. The only exception is the Qt AUTOMOC generated file for a
+`Q_OBJECT` defined in a `.cpp`, which stays double-quoted. CMake exposes `src/`
+as the include root (`GUITA_INCLUDE_ROOT`: `core` publicly, `client`
+privately). The QML type registration Qt generates includes each registered
+header by its bare file name, so `client` also adds `src/client/` as a private
+include directory; project code never relies on it.
+
+## Local environment
+
+- Dependencies that do not come from the system are installed without sudo in
+  `~/software` (`SOFTWARE_DIR` in the scripts; the CMake presets assume
+  `~/software`): libpqxx 8.0.2, cpp-httplib 0.61.0 and glaze 9.0.0
+  (`scripts/build-deps.sh`), Qt 6.12.0 desktop + WASM and
+  emsdk 5.0.5 (`scripts/setup-qt.sh`). The emsdk version is the one the Qt WASM
+  kit recommends (`QT_EMCC_RECOMMENDED_VERSION`); upgrade both together.
+  Anything managed by `uv` (the Python ≥ 3.10 that Emscripten needs,
+  `~/.local/bin/python3.12`) stays in uv's standard location; `EMSDK_PYTHON`
+  must point to it, also after sourcing `emsdk_env.sh`, which clears it.
+- System packages: GCC ≥ 13 (C++23), CMake ≥ 3.31 (glaze's install), zlib,
+  `libpq5-devel`, PostgreSQL.
+- Build with the `native` and `wasm` CMake presets (`scripts/build-wasm.sh`
+  also copies the web files to `build/web`, the server docroot).
+- GUI checks run on a virtual display (`Xvfb :99`), never on the user's desktop:
+  input simulation (`xdotool`) must not reach the user's windows. In Chrome on
+  Xvfb, WebGL needs `--enable-unsafe-swiftshader --use-angle=swiftshader`.
+
+## Working preferences
+
+- Every message addressed to the user is written in Spanish: questions,
+  progress updates, explanations and final summaries alike, even when the
+  code, docs and commits being discussed are in English.
+- Prefer durable context in repo files (this AGENTS.md) over internal agent
+  memory, so it survives clones/moves of the repository.
+- This file is versioned in the repository as durable context.
+- `openspec/` is versioned and public on purpose: it shows how the project is
+  developed with OpenSpec (proposals, designs, specs and archived changes), so
+  write its artifacts knowing anyone who downloads the project can read them.
+- `.opencode/` and `.claude/` stay private working material: they are
+  git-ignored and NOT published. Do not reference them (nor `tmp/`) from
+  published files (README, docs, ...). The public documentation is the README, kept light
+  (overview, getting started, running), and `docs/architecture.md`, the
+  technical reference: update the README when the plan changes visibly and the
+  architecture document whenever the design or the toolchain changes.
+- `CHANGELOG.md` follows Keep a Changelog 1.1.0 and Semantic Versioning. Every
+  change that is visible to users or to developers building on the project
+  adds its entry under `[Unreleased]` (Added, Changed, Deprecated, Removed,
+  Fixed, Security) as part of the same work, written in English from the
+  reader's point of view, not as a commit log. Internal steps never released
+  (such as a dependency swapped before any version) are not listed. On release,
+  `[Unreleased]` becomes `[X.Y.Z] - YYYY-MM-DD`, matching the CMake version and
+  the `vX.Y.Z` tag, and comparison links are added at the bottom once tags exist.
+
+## GitHub workflow (issues, branches, PRs)
+
+In force since the first commit, made directly on `develop/v0.1.0` with the
+initial POC (built without OpenSpec changes or issues). From then on, every
+change follows the cycle below.
+
+There is no `main`/`master`. The long-lived, default branch is
+`develop/vX.Y.Z` (for example `develop/v0.2.0`), which holds the version
+currently under development. Releasing cuts `release/vX.Y.Z` from it and tags
+`vX.Y.Z`; hotfixes bump the patch digit. When a new cycle starts,
+`develop/vX.Y.Z` is created from the released tag and becomes the default
+branch. The program version lives as the single source of truth in
+`CMakeLists.txt` (`project(... VERSION ...)`) and must match the branch suffix;
+a Linux CI workflow (to be added) will enforce it on `develop/**` and
+`release/**` pushes.
+
+Each OpenSpec change is tracked on GitHub with this cycle:
+
+1. OpenSpec proposal approved by the user.
+2. GitHub issue for the change, linking its `openspec/changes/<name>/`
+   folder (plus its milestone once milestones exist; the Projects board stays
+   light: Todo / In progress / Done). While active, the change folder is named
+   `is<n>-<slug>` after its issue; the date prefix is added only when the
+   change is archived.
+3. Branch created from the issue (Development panel → "Create a branch";
+   name like `change/is<n>-<slug>`) starting from `develop/vX.Y.Z`.
+4. Implementation on the branch + push (pushes are done by the user; the
+   agent has no SSH access to `origin` from its shell). The agent never
+   commits on its own: work stays uncommitted on the branch until the user
+   validates it (including visual verification); commit only after the user
+   explicitly confirms. Commits and PRs carry no co-authorship or AI
+   attribution: no `Co-Authored-By` trailers, no "Generated with" lines.
+5. PR toward `develop/vX.Y.Z` with `Closes #<n>` in the description → the Linux
+   CI validates the PR → user reviews the diff.
+6. Squash merge as the norm (one change = one clean commit on the development
+   branch). Exception: PRs whose intermediate commits have standalone value
+   (e.g. massive deletions separated from new code) → normal merge.
+7. The last commit on the branch may be the archiving of the change (only
+   after user confirmation), so merged PR = closed issue (automatic via
+   `Closes`) = archived change.
+8. After archiving a change, always review its Non-Goals section. For each
+   line leaving useful pending work, create a follow-up issue explaining the
+   pending scope, linking the archived change, and keeping the relation to
+   the original Non-Goal.
