@@ -4,6 +4,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import Guita
+import "Amount.js" as Amount
 
 ApplicationWindow {
     id: window
@@ -14,21 +15,6 @@ ApplicationWindow {
         case ApiConnection.Standalone: return qsTr("Standalone")
         default:                       return qsTr("Connected")
         }
-    }
-
-    // "1234.5" or "1234,50" -> 123450; -1 when it is not an amount. Exact:
-    // parsed as text and kept in a double (QML int is 32-bit; doubles hold
-    // whole numbers exactly up to 2^53), never through decimal arithmetic
-    function toCents(text: string): double {
-        const amount = text.trim().replace(",", ".")
-        if (!/^\d{1,10}(\.\d{1,2})?$/.test(amount))
-            return -1
-        const [units, decimals = ""] = amount.split(".")
-        return Number(units) * 100 + Number((decimals + "00").slice(0, 2))
-    }
-
-    function formatCents(cents: double): string {
-        return (cents / 100).toLocaleString(Qt.locale(), "f", 2)
     }
 
     visible: true
@@ -72,7 +58,7 @@ ApplicationWindow {
             Button {
                 text: qsTr("Save")
                 onClicked: {
-                    const cents = window.toCents(total.text)
+                    const cents = Amount.toCents(total.text)
                     if (cents < 0) {
                         status.text = qsTr("The total must be an amount such as 1234.50")
                         return
@@ -106,7 +92,7 @@ ApplicationWindow {
                             elide: Text.ElideRight
                             Layout.fillWidth: true
                         }
-                        Label { text: window.formatCents(row.modelData.totalCents) }
+                        Label { text: Amount.formatCents(row.modelData.totalCents) }
                     }
                 }
             }

@@ -6,7 +6,7 @@ qt_add_qml_module(client
     SOURCES
         ApiConnection.h ApiConnection.cpp
         InvoiceRepository.h InvoiceRepository.cpp
-    QML_FILES Main.qml)
+    QML_FILES Main.qml Amount.js)
 # Project headers resolve from src/ (<client/...>). The generated QML type
 # registration includes each header by its bare file name, hence this directory
 # as an extra private include directory
