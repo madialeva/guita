@@ -5,6 +5,7 @@
 # The database suites get an ephemeral PostgreSQL (Docker) or GUITA_TEST_DB.
 find_package(Qt6 REQUIRED COMPONENTS Test)
 find_package(libpqxx REQUIRED CONFIG)
+find_package(httplib REQUIRED CONFIG)
 
 # PostgreSQL fixture: CTest runs "start" once before the first suite that needs
 # it and "stop" after the last one, also when suites fail
@@ -50,3 +51,6 @@ guita_add_test(authorizer LABELS unit LIBS api)
 guita_add_test(migrations LABELS db LIBS core DATABASE)
 guita_add_test(invoicestore LABELS db LIBS core DATABASE)
 guita_add_test(database LABELS db LIBS api DATABASE)
+
+# REST API
+guita_add_test(restapi LABELS api LIBS api httplib::httplib DATABASE)

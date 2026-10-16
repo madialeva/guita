@@ -21,7 +21,7 @@
 
 ## 4. Pruebas del API REST
 
-- [ ] 4.1 Suite `restapi` (`api`): `Backend` en el puerto 0 con token y `httplib::Client`; 201 y 200 con sus formas JSON, 401, 400 por validación y por JSON inválido, 415, 405 con `Allow`, campo desconocido ignorado, NIF vacío guardado como `NULL` y respuesta gzip; verificar con `ctest --preset native -L api`
+- [x] 4.1 Suite `restapi` (`api`): `Backend` en el puerto 0 con token y `httplib::Client`; 201 y 200 con sus formas JSON, 401, 400 por validación y por JSON inválido, 415, 405 con `Allow`, campo desconocido ignorado, NIF vacío guardado como `NULL` y respuesta gzip; verificar con `ctest --preset native -L api`
 
 ## 5. Pruebas del cliente
 

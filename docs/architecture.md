@@ -388,6 +388,7 @@ application's default connection string.
 | `migrations` | `db` | schema from scratch, second run without changes, column types, the `CHECK` on totals |
 | `invoicestore` | `db` | exact cents ↔ `numeric(12,2)` (0.05, 1234.50, maximum), `NULL` tax ID, listing order |
 | `database` | `db` | pool with more threads than connections, rollback on exceptions, fail-fast statements, backend refusing a mismatched schema |
+| `restapi` | `api` | the REST contract: 201/200 shapes, 401, 400 (validation and malformed JSON), 415, 405 with `Allow`, unknown fields, `NULL` tax ID, gzip |
 
 ### 10.4 Continuous integration
 
