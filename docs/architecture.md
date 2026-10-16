@@ -214,6 +214,11 @@ registration (`QML_ELEMENT`, `QML_SINGLETON`), never through context
 properties, `qmlRegister*` calls or objects injected from `main.cpp`. Views use
 typed properties so `qmllint` checks every access.
 
+Presentation logic worth testing lives in JavaScript libraries of the module
+(`.pragma library`), such as `Amount.js`, which parses typed amounts into cents
+and formats cents per locale; views import them and Qt Quick Test covers them
+without loading any view.
+
 ### 5.3 Platform-specific pieces
 
 Only two pieces differ between native and WASM:
@@ -389,6 +394,8 @@ application's default connection string.
 | `invoicestore` | `db` | exact cents ↔ `numeric(12,2)` (0.05, 1234.50, maximum), `NULL` tax ID, listing order |
 | `database` | `db` | pool with more threads than connections, rollback on exceptions, fail-fast statements, backend refusing a mismatched schema |
 | `restapi` | `api` | the REST contract: 201/200 shapes, 401, 400 (validation and malformed JSON), 415, 405 with `Allow`, unknown fields, `NULL` tax ID, gzip |
+| `invoicerepository` | `client` | `ApiConnection` + `InvoiceRepository` against an embedded backend: list, create, the backend's validation message, a wrong token, an unreachable backend |
+| `amount` | `qml` | `Amount.js`: typed amounts with comma or dot, limits and rejections, and their display per locale |
 
 ### 10.4 Continuous integration
 

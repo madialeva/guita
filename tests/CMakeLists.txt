@@ -3,7 +3,7 @@
 #   ctest --preset native -L unit    only the suites that need no database
 #   ctest --preset native -L db      only the suites that need PostgreSQL
 # The database suites get an ephemeral PostgreSQL (Docker) or GUITA_TEST_DB.
-find_package(Qt6 REQUIRED COMPONENTS Test)
+find_package(Qt6 REQUIRED COMPONENTS Test Network Qml QuickTest)
 find_package(libpqxx REQUIRED CONFIG)
 find_package(httplib REQUIRED CONFIG)
 
@@ -54,3 +54,16 @@ guita_add_test(database LABELS db LIBS api DATABASE)
 
 # REST API
 guita_add_test(restapi LABELS api LIBS api httplib::httplib DATABASE)
+
+# Client: its classes are compiled into the suite, since they live in the
+# client executable that backs the QML module
+set(GUITA_CLIENT_DIR ${PROJECT_SOURCE_DIR}/src/client)
+guita_add_test(invoicerepository LABELS client
+    LIBS api Qt6::Network Qt6::Qml
+    SOURCES ${GUITA_CLIENT_DIR}/ApiConnection.h ${GUITA_CLIENT_DIR}/ApiConnection.cpp
+            ${GUITA_CLIENT_DIR}/InvoiceRepository.h ${GUITA_CLIENT_DIR}/InvoiceRepository.cpp
+    DATABASE)
+
+# QML logic (Qt Quick Test): the tst_*.qml cases in tests/qml
+guita_add_test(amount LABELS qml LIBS Qt6::QuickTest)
+target_compile_definitions(test_amount PRIVATE QUICK_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/qml")

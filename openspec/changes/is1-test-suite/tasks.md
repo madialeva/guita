@@ -25,9 +25,9 @@
 
 ## 5. Pruebas del cliente
 
-- [ ] 5.1 Suite `invoicerepository` (`client`): `ApiConnection` configurada contra un `Backend` embebido con token aleatorio, `InvoiceRepository` lista, crea y emite `failed` con el mensaje del backend, comprobado con `QSignalSpy`; verificar con `ctest --preset native -L client`
-- [ ] 5.2 Mover `toCents` y `formatCents` de `Main.qml` a `src/client/Amount.js` (`.pragma library`) importado por `Main.qml`; verificar que `client_qmllint` sigue limpio y que el cliente guarda y lista facturas igual que antes (Xvfb)
-- [ ] 5.3 Suite QML `amount` (`qml`) con Qt Quick Test: `1234,5`, `1234.50`, `0`, máximo, `1.234,50`, `-1`, texto vacío y formato con dos decimales; verificar con `ctest --preset native -L qml`
+- [x] 5.1 Suite `invoicerepository` (`client`): `ApiConnection` configurada contra un `Backend` embebido con token aleatorio, `InvoiceRepository` lista, crea y emite `failed` con el mensaje del backend, comprobado con `QSignalSpy`; verificar con `ctest --preset native -L client`
+- [x] 5.2 Mover `toCents` y `formatCents` de `Main.qml` a `src/client/Amount.js` (`.pragma library`) importado por `Main.qml`; verificar que `client_qmllint` sigue limpio y que el cliente guarda y lista facturas igual que antes (Xvfb)
+- [x] 5.3 Suite QML `amount` (`qml`) con Qt Quick Test: `1234,5`, `1234.50`, `0`, máximo, `1.234,50`, `-1`, texto vacío y formato con dos decimales; verificar con `ctest --preset native -L qml`
 
 ## 6. Integración
 

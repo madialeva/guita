@@ -81,7 +81,8 @@ QTP0004). Executables are written to `build/<preset>/bin`.
 - Money is never floating point: amounts are integer cents (`Cents`,
   `std::int64_t`) in C++ and in the JSON API (`totalCents`), and
   `numeric(12,2)` in PostgreSQL; stores convert in SQL. The client parses typed
-  amounts as text and keeps cents in a `double` (QML `int` is 32-bit).
+  amounts as text (`Amount.js`) and keeps cents in a `double` (QML `int` is
+  32-bit).
 - Optimistic locking is explicit: updates check and increment `version`
   (`WHERE id = $1 AND version = $2`) and treat zero affected rows as a conflict.
 - REST routes are registered per resource (`addInvoiceRoutes()`) and wrapped
@@ -281,9 +282,11 @@ Each OpenSpec change is tracked on GitHub with this cycle:
      `ctest --preset native` passes; the commit carries the group's code,
      tests, documentation and its `tasks.md` checkboxes. The planning
      artifacts (proposal, design, specs, tasks) go in the first commit.
-   - The message is an English summary of the group with the issue and the
-     group number, for example
-     `Add the test infrastructure with an ephemeral PostgreSQL (#1, group 1)`.
+   - The title starts with the issue as `[is<n>]`, so the commits of an
+     issue are easy to follow later, then an English summary of the group
+     and its number, for example
+     `[is1] Add the test infrastructure with an ephemeral PostgreSQL (group 1)`.
+     The body ends with `Refs #<n>` so GitHub links the commit to the issue.
    - Nothing outside the task groups is committed without the user's
      confirmation, and the change is not finished (PR, archive) until the user
      validates it, including visual verification.
