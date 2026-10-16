@@ -41,3 +41,7 @@ target_link_libraries(guita_test_support PUBLIC libpqxx::pqxx)
 
 # Test harness
 guita_add_test(testdatabase LABELS db DATABASE)
+
+# Backend without database
+guita_add_test(invoiceservice LABELS unit LIBS core)
+guita_add_test(authorizer LABELS unit LIBS api)

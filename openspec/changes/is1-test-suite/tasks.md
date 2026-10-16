@@ -10,8 +10,8 @@
 
 ## 2. Pruebas del backend sin base de datos
 
-- [ ] 2.1 Suite `invoiceservice` (`unit`): cliente obligatorio, importe negativo, importe por encima del máximo, sin conexión a base de datos (la normalización del NIF vacío, que solo se observa en la base de datos, se verifica en 4.1); retirar la suite de humo de 1.2; verificar con `ctest --preset native -L unit`
-- [ ] 2.2 Suite `authorizer` (`unit`): token correcto, incorrecto, ausente y token vacío que acepta todo; verificar con `ctest --preset native -L unit`
+- [x] 2.1 Suite `invoiceservice` (`unit`): cliente obligatorio, importe negativo, importe por encima del máximo, sin conexión a base de datos (la normalización del NIF vacío, que solo se observa en la base de datos, se verifica en 4.1); retirar la suite de humo de 1.2; verificar con `ctest --preset native -L unit`
+- [x] 2.2 Suite `authorizer` (`unit`): token correcto, incorrecto, ausente y token vacío que acepta todo; verificar con `ctest --preset native -L unit`
 
 ## 3. Pruebas del backend con base de datos
 

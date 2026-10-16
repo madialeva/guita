@@ -383,6 +383,8 @@ application's default connection string.
 | Suite | Label | Covers |
 |---|---|---|
 | `testdatabase` | `db` | the isolation of `TestDatabase` itself |
+| `invoiceservice` | `unit` | invoice validation (customer, negative and too large totals) without connecting to the database |
+| `authorizer` | `unit` | `tokenAuthorizer`: right, wrong, missing and malformed tokens; an empty token accepts everything |
 
 ### 10.4 Continuous integration
 
