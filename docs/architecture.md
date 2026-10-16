@@ -385,6 +385,9 @@ application's default connection string.
 | `testdatabase` | `db` | the isolation of `TestDatabase` itself |
 | `invoiceservice` | `unit` | invoice validation (customer, negative and too large totals) without connecting to the database |
 | `authorizer` | `unit` | `tokenAuthorizer`: right, wrong, missing and malformed tokens; an empty token accepts everything |
+| `migrations` | `db` | schema from scratch, second run without changes, column types, the `CHECK` on totals |
+| `invoicestore` | `db` | exact cents ↔ `numeric(12,2)` (0.05, 1234.50, maximum), `NULL` tax ID, listing order |
+| `database` | `db` | pool with more threads than connections, rollback on exceptions, fail-fast statements, backend refusing a mismatched schema |
 
 ### 10.4 Continuous integration
 

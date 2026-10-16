@@ -45,3 +45,8 @@ guita_add_test(testdatabase LABELS db DATABASE)
 # Backend without database
 guita_add_test(invoiceservice LABELS unit LIBS core)
 guita_add_test(authorizer LABELS unit LIBS api)
+
+# Backend with database
+guita_add_test(migrations LABELS db LIBS core DATABASE)
+guita_add_test(invoicestore LABELS db LIBS core DATABASE)
+guita_add_test(database LABELS db LIBS api DATABASE)

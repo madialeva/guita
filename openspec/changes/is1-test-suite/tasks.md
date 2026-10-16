@@ -15,9 +15,9 @@
 
 ## 3. Pruebas del backend con base de datos
 
-- [ ] 3.1 Suite `migrations` (`db`): esquema desde cero, segunda ejecución sin cambios, `schema_version` = 1, restricción `CHECK` contra importes negativos; verificar con `ctest --preset native -L db`
-- [ ] 3.2 Suite `invoicestore` (`db`): inserción y listado ordenado, céntimos exactos (5, 123450, 999999999999), NIF nulo; verificar con `ctest --preset native -L db`
-- [ ] 3.3 Suite `database` (`db`): pool con más hilos concurrentes que conexiones, rollback cuando la transacción lanza, fallo de `warmUp` con una sentencia incompatible con el esquema; verificar con `ctest --preset native -L db`
+- [x] 3.1 Suite `migrations` (`db`): esquema desde cero, segunda ejecución sin cambios, `schema_version` = 1, restricción `CHECK` contra importes negativos; verificar con `ctest --preset native -L db`
+- [x] 3.2 Suite `invoicestore` (`db`): inserción y listado ordenado, céntimos exactos (5, 123450, 999999999999), NIF nulo; verificar con `ctest --preset native -L db`
+- [x] 3.3 Suite `database` (`db`): pool con más hilos concurrentes que conexiones, rollback cuando la transacción lanza, fallo de `warmUp` con una sentencia incompatible con el esquema; verificar con `ctest --preset native -L db`
 
 ## 4. Pruebas del API REST
 
