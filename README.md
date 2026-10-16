@@ -40,7 +40,8 @@ Proof of concept (v0.1.0). See [CHANGELOG.md](CHANGELOG.md) for what each versio
 | ⬜ | Embedded PostgreSQL for standalone mode |
 | ⬜ | User authentication |
 | ⬜ | Desktop packages |
-| ⬜ | Tests and CI |
+| ✅ | Automated tests with an ephemeral PostgreSQL |
+| ⬜ | Continuous integration |
 
 ## Branching and versioning
 
@@ -90,6 +91,12 @@ and the `qttasktree` module.
 - **Desktop client**: the Qt 6.12 libraries; in standalone mode, libpq, zlib
   and a reachable PostgreSQL server as well.
 - **Web client**: any current browser with WebAssembly and WebGL support.
+
+### To test
+
+- **Docker**, so that the database tests can start an ephemeral PostgreSQL
+  container, or a PostgreSQL server of your own given in `GUITA_TEST_DB`
+  (see [Testing](#testing)).
 
 ## Installing the dependencies
 
@@ -164,6 +171,29 @@ The server reads `DB_CONN`, `HTTP_ADDRESS`, `HTTP_PORT`, `DOCROOT` and
 is an optional shared Bearer token for development (leave it empty for the web
 client); the standalone client generates a random one on every launch.
 
+## Testing
+
+The automated tests (Qt Test and Qt Quick Test, run by CTest) cover the
+backend, the REST API and the client. They build with the native preset and
+run headless:
+
+```sh
+ctest --preset native              # every suite
+ctest --preset native -L unit      # only the suites that need no database
+ctest --preset native -j8          # in parallel
+```
+
+Every suite is labeled by what it needs: `unit`, `db`, `api`, `client` or
+`qml`. The database suites never touch your development database: CTest starts
+an ephemeral `postgres:18.6` container on a random port before them and removes
+it afterwards, and every suite works in a database of its own. To use an
+existing server instead (as the CI does), give it a key=value libpq connection
+string with permission to create databases:
+
+```sh
+GUITA_TEST_DB="host=127.0.0.1 port=5432 user=postgres password=secret dbname=postgres" ctest --preset native
+```
+
 ## Internationalization
 
 English is the source language and the interface follows the system language
@@ -179,6 +209,7 @@ cmake --build --preset native --target update_translations
 ```text
 src/backend/   backend: core (domain, persistence), api (HTTP, REST), server
 src/client/    Qt/QML client, native and WebAssembly
+tests/         automated tests (Qt Test, CTest)
 scripts/       dependency setup, web build, server launcher, database SQL
 docs/          technical documentation
 openspec/      specs and change proposals: how the project is developed with OpenSpec

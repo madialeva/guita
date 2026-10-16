@@ -17,8 +17,16 @@ qt_standard_project_setup(REQUIRES 6.12
     I18N_SOURCE_LANGUAGE en
     I18N_TRANSLATED_LANGUAGES es)
 
+# BUILD_TESTING (ON by default) controls the test suite in tests/
+include(CTest)
+
 # The backend is native only: never built for WASM
 if(NOT EMSCRIPTEN)
     add_subdirectory(src/backend)
 endif()
 add_subdirectory(src/client)
+
+# Tests run natively: they need the backend, PostgreSQL and a native Qt
+if(BUILD_TESTING AND NOT EMSCRIPTEN)
+    add_subdirectory(tests)
+endif()

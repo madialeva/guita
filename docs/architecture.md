@@ -11,7 +11,7 @@ A single C++ code base that produces:
 |---|---|---|---|
 | **Web** | Qt/QML compiled to WebAssembly | remote server | server PostgreSQL |
 | **Desktop connected** | native Qt/QML | remote server | server PostgreSQL |
-| **Desktop standalone** | native Qt/QML | backend embedded in the client process (`127.0.0.1`) | local PostgreSQL (embedded instance planned, see §10) |
+| **Desktop standalone** | native Qt/QML | backend embedded in the client process (`127.0.0.1`) | local PostgreSQL (embedded instance planned, see §11) |
 
 Principles:
 
@@ -65,6 +65,7 @@ src/
 │   └── server/              server executable
 └── client/                  Qt/QML client, native and WASM
     └── translations/        Qt Linguist catalogs
+tests/                       automated tests (§10)
 scripts/                     dependency setup, WASM build, server launcher, DB SQL
 docs/                        this document
 ```
@@ -264,7 +265,7 @@ Authentication is pluggable rather than tied to an identity provider:
 
 The shared `API_TOKEN` is a development aid, not user authentication. User
 authentication owned by the backend (users in PostgreSQL, Argon2 password
-hashes, session tokens issued by the backend) is pending (§10): it keeps every
+hashes, session tokens issued by the backend) is pending (§11): it keeps every
 mode self-contained, without external services.
 
 ## 8. Toolchain
@@ -334,7 +335,64 @@ libraries (RUNPATH `$ORIGIN/lib`) and the Qt plugins and QML modules it uses;
 the backend libraries are linked statically or are header-only, and libpq
 comes from the system or the package.
 
-## 10. Pending work
+## 10. Testing
+
+### 10.1 Framework and layout
+
+All tests use Qt Test, and Qt Quick Test for QML logic, and are registered in
+CTest; they are native only and run headless (`QT_QPA_PLATFORM=offscreen`).
+The backend tests link Qt only in their own executables: `core`, `api` and
+`server` stay Qt-free.
+
+- `tests/CMakeLists.txt` defines `guita_add_test(<name> LABELS ... [LIBS ...]
+  [SOURCES ...] [DATABASE])`, which builds `test_<name>.cpp` against the layer
+  under test. Helpers live in `tests/support/` and are included as
+  `<support/...>`.
+- Every suite has a label saying what it needs: `unit` (nothing), `db`
+  (PostgreSQL), `api` (in-process backend and HTTP client), `client` (client
+  classes against an embedded backend), `qml` (Qt Quick Test).
+- `ctest --preset native` runs everything; `-L <label>` and `-LE <label>`
+  select subsets; `-j` runs suites in parallel.
+
+### 10.2 Ephemeral PostgreSQL
+
+The database suites run against a real PostgreSQL, the only safety net of
+explicit SQL. There is no mature Testcontainers for C++, so the same idea is
+expressed with CTest fixtures:
+
+- `postgres_start` (`FIXTURES_SETUP`) runs `tests/postgres-fixture.sh start`:
+  without `GUITA_TEST_DB` it starts an ephemeral `postgres:18.6` container
+  (`GUITA_TEST_PG_IMAGE` overrides the image) on a random loopback port with a
+  random password, waits until it accepts connections and writes the
+  connection string to a file in the build directory (`GUITA_TEST_DB_FILE`).
+  With `GUITA_TEST_DB` set it only writes that string.
+- `postgres_stop` (`FIXTURES_CLEANUP`) removes the container, also when suites
+  fail. Suites declared with `DATABASE` require the fixture, so the container
+  starts once per run and only when a selected suite needs it.
+- Without Docker or `GUITA_TEST_DB`, `postgres_start` fails with instructions
+  and the database suites are reported as not run (failed), never skipped.
+
+`TestDatabase` (`tests/support/`) gives each suite a database of its own,
+`guita_test_<suite>_<random>`, created empty from `template0` and dropped with
+`WITH (FORCE)` on destruction. Suites apply the migrations themselves, run in
+parallel without interfering, and leave nothing behind. No test ever uses the
+application's default connection string.
+
+### 10.3 What is tested
+
+| Suite | Label | Covers |
+|---|---|---|
+| `testdatabase` | `db` | the isolation of `TestDatabase` itself |
+
+### 10.4 Continuous integration
+
+A GitHub Actions job will declare a `postgres:18.6` service container with a
+health check and export `GUITA_TEST_DB` with its connection string, so the
+fixture starts nothing; the rest is `cmake --preset native`, `cmake --build
+--preset native` and `ctest --preset native`. The same suites run locally and
+in CI; only the provider of the server changes.
+
+## 11. Pending work
 
 - **Embedded PostgreSQL** for standalone mode: ship the PostgreSQL binaries
   (`initdb`, `pg_ctl`, `postgres`, `createdb`, `lib/`, `share/`) next to the
@@ -346,12 +404,11 @@ comes from the system or the package.
   Linux; the first `initdb` takes a few seconds, later starts about one.
 - **Typed contract with Protobuf** and RPC over HTTP between client and backend.
 - **User authentication** owned by the backend (§7).
-- **Tests** (backend services against a real PostgreSQL, client with
-  `QT_QPA_PLATFORM=offscreen`) and **Linux CI**.
+- **Continuous integration** on GitHub Actions (§10.4).
 - **Desktop packaging** (§9.2).
 - **Translated backend error messages**.
 
-## 11. Considerations
+## 12. Considerations
 
 - **Licenses:** the project is MIT. The backend libraries are permissive
   (cpp-httplib and glaze MIT, libpqxx BSD-3-Clause, libpq PostgreSQL License).

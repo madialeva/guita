@@ -37,7 +37,7 @@ an approved OpenSpec change.
 ## Source layout
 
 The repository root holds only project files (CMake, presets, AGENTS.md,
-README), `scripts/`, `docs/`, `openspec/` (versioned and public, see Working
+README), `scripts/`, `docs/`, `tests/`, `openspec/` (versioned and public, see Working
 preferences), and the git-ignored `build/` and `tmp/` (the user's local
 working material: never publish it nor reference it from published files). All
 source code lives in `src/`, grouped by side of the architecture:
@@ -50,6 +50,7 @@ src/
 │   └── server/       server executable
 └── client/           Qt/QML client (native + WASM): API connection, repositories, views
     └── translations/ Qt Linguist catalogs (English source)
+tests/                automated tests (Qt Test, CTest) and their helpers in tests/support/
 scripts/              dependency setup, WASM build, server launcher, database creation SQL
 docs/                 technical documentation (architecture.md)
 ```
@@ -113,6 +114,28 @@ context properties, `qmlRegister*` calls or objects injected from `main.cpp`:
   and loads `Main`; no wiring between C++ objects and views lives there.
 - Everything in the client is asynchronous (signals, callbacks): WASM forbids
   blocking waits and nested `QEventLoop::exec()`.
+
+## Tests
+
+- Every change lands the tests of its own behavior in the same work, and
+  `ctest --preset native` must pass before the change is considered done.
+  Bugs get a test that reproduces them before the fix.
+- Tests use Qt Test (Qt Quick Test for QML logic) and are registered with
+  `guita_add_test()` in `tests/CMakeLists.txt`, one `test_<name>.cpp` per
+  suite, with exactly the label of what they need: `unit`, `db`, `api`,
+  `client` or `qml`. Backend tests may link Qt; `core`, `api` and `server`
+  never do.
+- Database suites are declared with `DATABASE` and always work through
+  `TestDatabase` (`<support/TestDatabase.h>`): a database of their own on the
+  ephemeral server, migrated by the suite. They never use the application's
+  default connection string or the developer's `guita` database, and never
+  depend on data left by another suite.
+- The test server is the ephemeral `postgres:18.6` container started by the
+  CTest fixture (Docker), or the one in `GUITA_TEST_DB`. Tests must pass in
+  parallel (`ctest -j`).
+- API responses are checked by parsing them with Qt (`QJsonDocument`), not with
+  the library the code under test uses.
+- Keep the suite table in `docs/architecture.md` (§10.3) up to date.
 
 ## OpenSpec
 
@@ -190,6 +213,8 @@ include directory; project code never relies on it.
   must point to it, also after sourcing `emsdk_env.sh`, which clears it.
 - System packages: GCC ≥ 13 (C++23), CMake ≥ 3.31 (glaze's install), zlib,
   `libpq5-devel`, PostgreSQL.
+- Docker (the user may run it without sudo) for the ephemeral test PostgreSQL;
+  the local image is `postgres:18.6`.
 - Build with the `native` and `wasm` CMake presets (`scripts/build-wasm.sh`
   also copies the web files to `build/web`, the server docroot).
 - GUI checks run on a virtual display (`Xvfb :99`), never on the user's desktop:
@@ -249,15 +274,25 @@ Each OpenSpec change is tracked on GitHub with this cycle:
 3. Branch created from the issue (Development panel → "Create a branch";
    name like `change/is<n>-<slug>`) starting from `develop/vX.Y.Z`.
 4. Implementation on the branch + push (pushes are done by the user; the
-   agent has no SSH access to `origin` from its shell). The agent never
-   commits on its own: work stays uncommitted on the branch until the user
-   validates it (including visual verification); commit only after the user
-   explicitly confirms. Commits and PRs carry no co-authorship or AI
-   attribution: no `Co-Authored-By` trailers, no "Generated with" lines.
+   agent has no SSH access to `origin` from its shell). Commits are partial,
+   one per task group of `tasks.md`, so that no commit is huge and the branch
+   history follows the tasks:
+   - The agent commits a group as soon as all its tasks are done and
+     `ctest --preset native` passes; the commit carries the group's code,
+     tests, documentation and its `tasks.md` checkboxes. The planning
+     artifacts (proposal, design, specs, tasks) go in the first commit.
+   - The message is an English summary of the group with the issue and the
+     group number, for example
+     `Add the test infrastructure with an ephemeral PostgreSQL (#1, group 1)`.
+   - Nothing outside the task groups is committed without the user's
+     confirmation, and the change is not finished (PR, archive) until the user
+     validates it, including visual verification.
+   - Commits and PRs carry no co-authorship or AI attribution: no
+     `Co-Authored-By` trailers, no "Generated with" lines.
 5. PR toward `develop/vX.Y.Z` with `Closes #<n>` in the description → the Linux
    CI validates the PR → user reviews the diff.
 6. Squash merge as the norm (one change = one clean commit on the development
-   branch). Exception: PRs whose intermediate commits have standalone value
+   branch; the per-group commits stay in the PR for review). Exception: PRs whose intermediate commits have standalone value
    (e.g. massive deletions separated from new code) → normal merge.
 7. The last commit on the branch may be the archiving of the change (only
    after user confirmation), so merged PR = closed issue (automatic via
