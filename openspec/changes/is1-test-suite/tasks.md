@@ -31,5 +31,5 @@
 
 ## 6. Integración
 
-- [ ] 6.1 Ejecutar la batería completa en serie y en paralelo (`ctest --preset native -j8`) con el contenedor efímero y con `GUITA_TEST_DB`, y comprobar que ambos resultados coinciden, que no quedan contenedores ni bases de prueba y que la base `guita` de desarrollo no se ha tocado
-- [ ] 6.2 Añadir la entrada correspondiente en `CHANGELOG.md` (`[Unreleased]` → Added) y verificar que describe lo que ve un desarrollador
+- [x] 6.1 Ejecutar la batería completa en serie y en paralelo (`ctest --preset native -j8`) con el contenedor efímero y con `GUITA_TEST_DB`, y comprobar que ambos resultados coinciden, que no quedan contenedores ni bases de prueba y que la base `guita` de desarrollo no se ha tocado
+- [x] 6.2 Añadir la entrada correspondiente en `CHANGELOG.md` (`[Unreleased]` → Added) y verificar que describe lo que ve un desarrollador

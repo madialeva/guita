@@ -31,3 +31,7 @@ First version: a proof of concept of the architecture, to be released as 0.1.0.
 - Scripts to install the toolchain and libraries without root privileges, build
   the web client, run the server and create the database.
 - README and architecture documentation.
+- Automated test suite run with `ctest --preset native`: backend, REST API,
+  client and QML amount logic, with an ephemeral PostgreSQL container started
+  and removed by the test run (or an existing server in `GUITA_TEST_DB`), and
+  labels to run subsets such as the suites that need no database.
