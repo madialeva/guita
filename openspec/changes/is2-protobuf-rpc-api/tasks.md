@@ -9,7 +9,7 @@
 
 ## 2. Interoperabilidad de los generadores
 
-- [ ] 2.1 Suite `contract` (`unit`): codificar con el código de `protoc` y decodificar con el de Qt Protobuf y al revés, con NIF ausente y presente, importes 0 y máximos de `int64` y listados; verificar con `ctest --preset native -L unit`
+- [x] 2.1 Suite `contract` (`unit`): codificar con el código de `protoc` y decodificar con el de Qt Protobuf y al revés, con NIF ausente y presente, importes 0 y máximos de `int64` y listados; verificar con `ctest --preset native -L unit`
 
 ## 3. Backend RPC
 

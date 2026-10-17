@@ -407,6 +407,8 @@ application's default connection string.
 | Suite | Label | Covers |
 |---|---|---|
 | `testdatabase` | `db` | the isolation of `TestDatabase` itself |
+| `contract_lint`, `contract_format` | `unit` | `buf lint` and `buf format` on the contract |
+| `contract` | `unit` | the two generators write and read the same bytes, both ways: optional tax ID absent, empty and present, `int64` limits, a 1000-invoice list |
 | `invoiceservice` | `unit` | invoice validation (customer, negative and too large totals) without connecting to the database |
 | `authorizer` | `unit` | `tokenAuthorizer`: right, wrong, missing and malformed tokens; an empty token accepts everything |
 | `migrations` | `db` | schema from scratch, second run without changes, column types, the `CHECK` on totals |

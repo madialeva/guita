@@ -3,7 +3,7 @@
 #   ctest --preset native -L unit    only the suites that need no database
 #   ctest --preset native -L db      only the suites that need PostgreSQL
 # The database suites get an ephemeral PostgreSQL (Docker) or GUITA_TEST_DB.
-find_package(Qt6 REQUIRED COMPONENTS Test Network Qml QuickTest)
+find_package(Qt6 REQUIRED COMPONENTS Test Network Qml QuickTest Protobuf)
 find_package(libpqxx REQUIRED CONFIG)
 find_package(httplib REQUIRED CONFIG)
 
@@ -42,6 +42,9 @@ target_link_libraries(guita_test_support PUBLIC libpqxx::pqxx)
 
 # Test harness
 guita_add_test(testdatabase LABELS db DATABASE)
+
+# Contract: the two generators write and read the same bytes
+guita_add_test(contract LABELS unit LIBS contract contract_qt Qt6::Protobuf)
 
 # Backend without database
 guita_add_test(invoiceservice LABELS unit LIBS core)
