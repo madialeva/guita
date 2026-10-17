@@ -170,6 +170,9 @@ context properties, `qmlRegister*` calls or objects injected from `main.cpp`:
 - API responses are checked by parsing them with Qt (`QJsonDocument`), not with
   the library the code under test uses.
 - Keep the suite table in `docs/architecture.md` (§10.3) up to date.
+- Measurements live in `tests/bench`, outside `ctest`: built in Release with
+  the `bench` and `wasm-bench` presets; their results are documented in
+  `docs/architecture.md` (§4.5) and are refreshed when what they measure changes.
 
 ## OpenSpec
 

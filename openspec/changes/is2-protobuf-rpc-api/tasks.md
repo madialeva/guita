@@ -36,9 +36,9 @@
 
 ## 6. Medición
 
-- [ ] 6.1 Crear `tests/bench/encoding_bench.cpp` (fuera de `ctest`) que mida tamaño y tiempo de codificar y decodificar JSON, JSON con gzip y binario para 1 000 y 10 000 facturas; verificar que se ejecuta en nativo y da resultados estables entre dos ejecuciones
-- [ ] 6.2 Crear `tests/bench/latency_bench.cpp` (fuera de `ctest`) con la latencia de ida y vuelta de una llamada en proceso, de un `POST` con *keep-alive* y de un frame de WebSocket con los mismos bytes, estos dos sobre cpp-httplib en *loopback*; verificar que da resultados estables entre dos ejecuciones
-- [ ] 6.3 Compilar la medición de codificación para WASM y ejecutarla en Chrome sin pantalla; documentar los resultados de las dos mediciones, en nativo y WASM, y el tamaño del `.wasm` del cliente antes y después del cambio, en `docs/architecture.md`
+- [x] 6.1 Crear `tests/bench/encoding_bench.cpp` (fuera de `ctest`) que mida tamaño y tiempo de codificar y decodificar JSON, JSON con gzip y binario para 1 000 y 10 000 facturas; verificar que se ejecuta en nativo y da resultados estables entre dos ejecuciones
+- [x] 6.2 Crear `tests/bench/latency_bench.cpp` (fuera de `ctest`) con la latencia de ida y vuelta de una llamada en proceso, de un `POST` con *keep-alive* y de un frame de WebSocket con los mismos bytes, estos dos sobre cpp-httplib en *loopback*; verificar que da resultados estables entre dos ejecuciones
+- [x] 6.3 Compilar la medición de codificación para WASM y ejecutarla en Chrome sin pantalla; documentar los resultados de las dos mediciones, en nativo y WASM, y el tamaño del `.wasm` del cliente antes y después del cambio, en `docs/architecture.md`
 
 ## 7. Integración
 

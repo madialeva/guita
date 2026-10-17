@@ -250,6 +250,64 @@ It is configured through environment variables:
 cpp-httplib also supports WebSockets (`Server::WebSocket()`), a candidate for
 the planned persistent channel (§11).
 
+### 4.5 Measurements
+
+Two programs in `tests/bench`, outside `ctest`, built in Release with the
+`bench` preset (native) and `wasm-bench` (WebAssembly):
+
+```sh
+cmake --preset bench && cmake --build --preset bench
+build/bench/bin/bench_encoding
+build/bench/bin/bench_latency            # --quick: a twentieth of the calls
+```
+
+Results on an AMD Ryzen 5 5625U (12 threads), Linux, Release builds; the
+WebAssembly figures in Chrome 155. Stable within a few percent between runs.
+
+**Invoice lists, client side** (`bench_encoding`): JSON is the canonical proto3
+JSON the API also serves; "compressed" is a zlib stream at the default level,
+close to what gzip sends. Decoding compares the former client path (JSON to
+`QVariantList`) with the current one (binary to Qt Protobuf messages).
+
+| Invoices | Format | Bytes | Compressed | Encode native | Decode native | Encode WASM | Decode WASM |
+|---|---|---|---|---|---|---|---|
+| 1 000 | JSON | 79 904 | 11 603 | 2.1 ms | 1.1 ms | 5.1 ms | 1.9 ms |
+| 1 000 | Protobuf | 33 253 | 8 616 | 1.0 ms | 0.9 ms | 1.7 ms | 1.6 ms |
+| 10 000 | JSON | 828 822 | 119 907 | 21.6 ms | 15.2 ms | 52 ms | 19 ms |
+| 10 000 | Protobuf | 352 059 | 81 415 | 9.6 ms | 8.6 ms | 17 ms | 15 ms |
+
+**Round trip of a small call per transport** (`bench_latency`, loopback, a
+stub procedure without database, so only the transport is measured):
+
+| Transport | p50 | p90 | p99 |
+|---|---|---|---|
+| `RpcRouter::call()` directly | 0.1 µs | 0.1 µs | 0.2 µs |
+| In process: pool thread + event queue (as `InProcTransport`) | 9.5 µs | 11 µs | 15 µs |
+| HTTP `POST`, keep-alive | 35 µs | 45 µs | 105 µs |
+| WebSocket frame, same bytes | 41 µs | 50 µs | 68 µs |
+
+**Size of `client.wasm`**: 27 725 237 bytes before the contract, 27 941 331
+with Qt Protobuf (+211 KiB, +0.8 %).
+
+Reading:
+
+- Protobuf messages are about 2.4 times smaller than JSON, and 1.3 to 1.5 times
+  smaller once compressed, since gzip already removes most of JSON's repetition.
+  Encoding is 2 to 3 times faster. Decoding gains less: 1.2 to 1.8 times
+  natively and 1.2 to 1.3 times in WebAssembly, where Qt Protobuf's decoder is
+  not much faster than `QJsonDocument`. The decisive gain is the typed
+  contract; speed and size come on top.
+- The in-process transport costs about a quarter of HTTP on loopback, and
+  opens no socket at all. A real call adds the database time (hundreds of
+  microseconds), which dominates either way.
+- With cpp-httplib, a WebSocket frame is not faster than an HTTP request with
+  keep-alive for request/response. The case for the planned persistent channel
+  is server push and multiplexing, not the latency of one call, and an event
+  loop server can be evaluated for it.
+- Small request/response exchanges need `TCP_NODELAY`: without it, Nagle's
+  algorithm and delayed ACKs made each WebSocket round trip take about 82 ms.
+  The backend enables it on its HTTP server.
+
 ## 5. Client
 
 ### 5.1 API connection and repositories

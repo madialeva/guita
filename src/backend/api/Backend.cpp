@@ -35,6 +35,9 @@ struct Backend::Impl {
     }
 
     void setUpHttp(const HttpOptions &o) {
+        // RPC is request/response with small messages: without TCP_NODELAY,
+        // Nagle's algorithm and delayed ACKs can add ~40 ms to a reply
+        http.set_tcp_nodelay(true);
         http.set_payload_max_length(kMaxRequestBody);
         if (!o.docroot.empty() && !http.set_mount_point("/", o.docroot))
             throw std::runtime_error("Docroot not found: " + o.docroot);

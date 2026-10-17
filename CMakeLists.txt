@@ -29,6 +29,12 @@ if(NOT EMSCRIPTEN)
 endif()
 add_subdirectory(src/client)
 
+# Measurements (tests/bench), native and WASM; off by default
+option(GUITA_BENCH "Build the measurement programs in tests/bench" OFF)
+if(GUITA_BENCH)
+    add_subdirectory(tests/bench)
+endif()
+
 # Tests run natively: they need the backend, PostgreSQL and a native Qt
 if(BUILD_TESTING AND NOT EMSCRIPTEN)
     add_subdirectory(tests)

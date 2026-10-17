@@ -130,6 +130,7 @@ Dos programas de medición, fuera de `ctest`, con resultados documentados en `do
 - [El JSON de Qt escribe los `int64` como números y el canónico como texto] → El cliente no usa JSON; las pruebas comprueban que el backend acepta ambos.
 - [Qt Protobuf aumenta el tamaño del `.wasm`] → Se mide en la decisión 11 y se documenta.
 - [Un router común a varios transportes podría acabar con supuestos de HTTP] → La suite `rpcrouter` lo prueba sin ningún transporte, y los estados HTTP solo existen en `HttpRpcTransport`.
+- [Nagle y el ACK retardado de TCP añaden ~40 ms por extremo a un intercambio petición/respuesta de mensajes pequeños; con cpp-httplib, los frames de WebSocket pasaban de ~0,1 ms a ~82 ms] → `TCP_NODELAY` en el servidor HTTP del backend y en los dos extremos de las mediciones; el canal WebSocket posterior debe activarlo en servidor y cliente (hallado al medir la latencia).
 - [Llamadas en proceso en vuelo al cerrar la aplicación] → `main.cpp` espera al pool antes de destruir el `Backend`.
 - [Los dos transportes del cliente podrían divergir] → `invoicerepository` ejecuta los mismos casos con ambos.
 - [Cambio incompatible del API] → No hay versiones publicadas ni consumidores externos; cliente y servidor salen de la misma versión.
