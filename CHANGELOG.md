@@ -40,3 +40,6 @@ First version: a proof of concept of the architecture, to be released as 0.1.0.
   client and QML amount logic, with an ephemeral PostgreSQL container started
   and removed by the test run (or an existing server in `GUITA_TEST_DB`), and
   labels to run subsets such as the suites that need no database.
+- Measurement programs for message encodings and transport latency, native
+  and WebAssembly (`bench` and `wasm-bench` presets), with their results in
+  the architecture document.

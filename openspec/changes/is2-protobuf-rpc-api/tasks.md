@@ -42,4 +42,4 @@
 
 ## 7. Integración
 
-- [ ] 7.1 Ejecutar la batería completa (`ctest --preset native -j8`) y listar facturas con `buf curl` contra `scripts/run-server.sh`; verificar que todo pasa y que la herramienta Connect muestra el listado
+- [x] 7.1 Ejecutar la batería completa (`ctest --preset native -j8`) y listar facturas con `buf curl` contra `scripts/run-server.sh`; verificar que todo pasa y que la herramienta Connect muestra el listado
