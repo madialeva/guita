@@ -13,15 +13,15 @@
 
 ## 2. Backend sin JSON ni descriptores
 
-- [ ] 2.1 Retirar `RpcCodec` de `RpcCall`, y de `RpcRouter` el códec JSON; comprobar el contrato al registrar con `GetTypeName()` según la convención `<Método>Request`/`<Método>Response`. Adaptar `InProcTransport` a la nueva `RpcCall` y la suite `rpcrouter` (casos binarios y rechazo de tipos de otro método). Verificar con `ctest --preset native -L unit`.
-- [ ] 2.2 `HttpRpcTransport`: solo `application/proto` (JSON y otros tipos dan 415) y `connectErrorBody()`, sin `google.protobuf.Struct`. Adaptar la suite `rpcapi`:
+- [x] 2.1 Retirar `RpcCodec` de `RpcCall`, y de `RpcRouter` el códec JSON; comprobar el contrato al registrar con `GetTypeName()` según la convención `<Método>Request`/`<Método>Response`. Adaptar `InProcTransport` a la nueva `RpcCall` y la suite `rpcrouter` (casos binarios y rechazo de tipos de otro método). Verificar con `ctest --preset native -L unit`.
+- [x] 2.2 `HttpRpcTransport`: solo `application/proto` (JSON y otros tipos dan 415) y `connectErrorBody()`, sin `google.protobuf.Struct`. Adaptar la suite `rpcapi`:
   - casos binarios y campo desconocido;
   - `application/json` → 415;
   - binario mal formado → 400;
   - `connectErrorBody()` con comillas, barras y texto no ASCII, leído con `QJsonDocument`.
 
   Verificar con `ctest --preset native -L api`.
-- [ ] 2.3 Documentar el API binario y la depuración con `buf curl` y `protoc --encode`/`--decode` (`docs/architecture.md` §4.3 y §4.4, README) y corregir las entradas del CHANGELOG. Verificar los ejemplos contra `scripts/run-server.sh` tal como se documentan.
+- [x] 2.3 Documentar el API binario y la depuración con `buf curl` y `protoc --encode`/`--decode` (`docs/architecture.md` §4.3 y §4.4, README) y corregir las entradas del CHANGELOG. Verificar los ejemplos contra `scripts/run-server.sh` tal como se documentan.
 
 ## 3. Cliente sobre los mensajes de `protoc`
 

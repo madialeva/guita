@@ -18,16 +18,17 @@ First version: a proof of concept of the architecture, to be released as 0.1.0.
   process, so that it opens no network port and needs no token.
 - C++ backend without framework or ORM: embedded HTTP server (cpp-httplib),
   PostgreSQL access through prepared statements (libpqxx) and the contract's
-  binary and JSON encodings (protobuf).
+  binary encoding (protobuf).
 - Sample invoicing domain: create and list invoices (customer, optional tax ID
   and total).
 - Typed client-backend contract in Protobuf (`src/proto`, package `guita.v1`),
   the single source of the code of both sides, with style and compatibility
   checks (buf).
 - RPC API compatible with the Connect protocol: `POST
-  /api/guita.v1.InvoiceService/<Method>` in binary Protobuf or JSON, with
-  Connect errors and gzip-compressed responses.
-- Exact money handling: integer cents in C++ and JSON, `numeric(12,2)` in
+  /api/guita.v1.InvoiceService/<Method>` in binary Protobuf, with Connect
+  errors and gzip-compressed responses; `buf curl` and `protoc
+  --encode`/`--decode` write and read its messages by hand.
+- Exact money handling: integer cents in C++ and in the API, `numeric(12,2)` in
   PostgreSQL.
 - Automatic PostgreSQL schema migrations on every start.
 - The server also serves the web client.

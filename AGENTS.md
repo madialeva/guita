@@ -103,19 +103,21 @@ QTP0004). Executables are written to `build/<preset>/bin`.
 - `pqxx::connection` is not thread-safe and the HTTP server handles requests
   concurrently: connections come from the `Database` pool, one per transaction.
 - Money is never floating point: amounts are integer cents (`Cents`,
-  `std::int64_t`) in C++ and in the JSON API (`totalCents`), and
+  `std::int64_t`) in C++ and in the API (`total_cents`), and
   `numeric(12,2)` in PostgreSQL; stores convert in SQL. The client parses typed
   amounts as text (`Amount.js`) and keeps cents in a `double` (QML `int` is
   32-bit).
 - Optimistic locking is explicit: updates check and increment `version`
   (`WHERE id = $1 AND version = $2`) and treat zero affected rows as a conflict.
 - Procedures are registered per service on `RpcRouter`
-  (`addInvoiceProcedures()`) with `add<Request, Response>()`, which checks them
-  against the contract at startup. Handlers receive decoded messages, convert
-  them to and from `core`'s structs and throw `std::invalid_argument` for
-  validation errors; the router turns exceptions into Connect codes. Neither
-  handlers nor `core` know the transport: HTTP statuses exist only in
-  `HttpRpcTransport`.
+  (`addInvoiceProcedures()`) with `add<Request, Response>()`, which checks at
+  startup that the types are the method's (`<Method>Request`,
+  `<Method>Response` in the service's package). The API is binary Protobuf
+  only; Connect errors are JSON, written by `connectErrorBody()`. Handlers
+  receive decoded messages, convert them to and from `core`'s structs and
+  throw `std::invalid_argument` for validation errors; the router turns
+  exceptions into Connect codes. Neither handlers nor `core` know the
+  transport: HTTP statuses exist only in `HttpRpcTransport`.
 - `backend/api/Backend.h` must not include cpp-httplib, libpqxx or protobuf
   (pimpl): the client only needs that interface to embed the backend.
 - Authentication is a shared Bearer token for now (random per launch in

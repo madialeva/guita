@@ -25,7 +25,7 @@ Principles:
 - **Same engine (PostgreSQL), same SQL and same migrations** in every mode.
 - The **backend never depends on Qt** and the **client never accesses the database**.
 - The backend uses **small libraries, not a framework**: an embedded HTTP
-  server, a PostgreSQL client and a JSON library, all with permissive licenses.
+  server, a PostgreSQL client and Protobuf, all with permissive licenses.
 
 ## 2. Overview
 
@@ -124,7 +124,7 @@ There is no ORM: SQL is explicit and lives in one place per aggregate.
 - **Entities** are plain structs (`Invoice`, `NewInvoice`); nullable columns are
   `std::optional`.
 - **Money** is never floating point: amounts are integer cents (`Cents`,
-  `std::int64_t`) in C++ and in the JSON API, and `numeric(12,2)` in
+  `std::int64_t`) in C++ and in the API (`total_cents`), and `numeric(12,2)` in
   PostgreSQL. The store converts in SQL (`$3::numeric / 100` on write,
   `(total * 100)::bigint` on read), and a `CHECK` constraint backs the
   service's validation.
@@ -167,15 +167,19 @@ The API is the contract of `src/proto` (§3), served as unary RPC procedures.
 Dispatch does not depend on the transport:
 
 - **`RpcRouter`** knows procedures, not transports. It takes an `RpcCall`
-  (procedure, codec, encoded request, authorization) and returns an
-  `RpcResult` (Connect code, encoded response or error message). It checks the
-  authorization, finds the procedure, decodes and encodes with the codec, and
+  (procedure, binary request, authorization) and returns an `RpcResult`
+  (Connect code, binary response or error message). It checks the
+  authorization, finds the procedure, decodes the request (skipping fields the
+  contract does not define, of a later version) and encodes the response, and
   turns exceptions into codes: `std::invalid_argument` into
   `invalid_argument` with its message, anything else into `internal`
   (logged). Handlers are registered typed
-  (`add<Request, Response>("guita.v1.InvoiceService/CreateInvoice", ...)`),
-  and registering a method that is not in the contract, or with other types,
-  fails at startup. Once registered, `call()` is thread-safe.
+  (`add<Request, Response>("guita.v1.InvoiceService/CreateInvoice", ...)`).
+  The messages carry no descriptors, so registration checks the names of
+  their types against the method, `guita.v1.CreateInvoiceRequest` and
+  `guita.v1.CreateInvoiceResponse` (the convention `buf lint` enforces), and
+  fails at startup with types of another method or package. Once registered,
+  `call()` is thread-safe.
 - **`InvoiceProcedures`** registers `guita.v1.InvoiceService` and converts
   between the contract's messages and the domain structs of `core`, which
   knows nothing of the contract.
@@ -196,26 +200,36 @@ translated yet.
 
 **Over HTTP** (`HttpRpcTransport`), the unary subset of the Connect protocol:
 
-- `POST /api/<package>.<Service>/<Method>`, with the request in binary Protobuf
-  (`Content-Type: application/proto`, what the client uses) or in canonical
-  proto3 JSON (`application/json`, for debugging and tools: lowerCamelCase
-  names, `int64` written as strings and read as strings or numbers, unknown
-  fields ignored, fields without presence printed even when zero). The
-  response uses the request's codec; any other content type gets `415`.
+- `POST /api/<package>.<Service>/<Method>`, with the request and the response
+  in binary Protobuf (`Content-Type: application/proto`); any other content
+  type, `application/json` included, gets `415`.
 - `Connect-Protocol-Version: 1` is accepted and not required, so Connect
-  clients and tools such as `buf curl` can call the API with `/api` as prefix.
-- Errors are Connect errors, `{"code": "...", "message": "..."}` as JSON,
-  with these statuses: `invalid_argument` 400, `unauthenticated` 401,
+  clients and tools that use the binary codec, such as `buf curl`, can call
+  the API with `/api` as prefix. Connect clients that default to JSON (such as
+  connect-web) need the binary codec configured.
+- Errors are Connect errors, `{"code": "...", "message": "..."}` as JSON (as
+  Connect defines them for any codec, written by `connectErrorBody()`), with
+  these statuses: `invalid_argument` 400, `unauthenticated` 401,
   `unimplemented` 404 (unknown procedure) or 415 (content type), `internal`
   500; other HTTP methods on a procedure get `405` with `Allow: POST`.
 - Responses are compressed with gzip when the client accepts it (cpp-httplib is
   built with zlib); request bodies are limited to 16 MiB.
 
+The API serves no JSON, but its messages can still be written and read by hand
+with the contract. `buf curl` takes the request in JSON, sends it in binary and
+prints the response in JSON; `protoc --encode` and `--decode` convert between
+Protobuf's text format and binary, for example to send a hand-written request
+with `curl` or to read a captured message:
+
 ```sh
-curl -H 'Content-Type: application/json' -d '{}' \
+buf curl --schema src/proto --data '{}' \
      http://127.0.0.1:8090/api/guita.v1.InvoiceService/ListInvoices
-curl -H 'Content-Type: application/json' -d '{"customer":"Acme","totalCents":"121000"}' \
-     http://127.0.0.1:8090/api/guita.v1.InvoiceService/CreateInvoice
+
+echo 'customer: "Acme S.L." total_cents: 121000' |
+  protoc -I src/proto --encode=guita.v1.CreateInvoiceRequest guita/v1/invoice_service.proto |
+  curl -s --data-binary @- -H 'Content-Type: application/proto' \
+       http://127.0.0.1:8090/api/guita.v1.InvoiceService/CreateInvoice |
+  protoc -I src/proto --decode=guita.v1.CreateInvoiceResponse guita/v1/invoice_service.proto
 ```
 
 ### 4.4 Backend and server
@@ -552,8 +566,8 @@ application's default connection string.
 | `migrations` | `db` | schema from scratch, second run without changes, column types, the `CHECK` on totals |
 | `invoicestore` | `db` | exact cents ↔ `numeric(12,2)` (0.05, 1234.50, maximum), `NULL` tax ID, listing order |
 | `database` | `db` | pool with more threads than connections, rollback on exceptions, fail-fast statements, backend refusing a mismatched schema |
-| `rpcrouter` | `unit` | `RpcRouter` without any transport: both codecs, authorization, unknown procedures, malformed messages, exceptions to codes, procedures outside the contract refused, concurrent calls |
-| `rpcapi` | `api` | the RPC API over HTTP: both procedures in binary and JSON, absent tax ID, unknown fields, Connect errors (400, 401, 404, 405, 415), and an in-process `Backend` that listens on no port |
+| `rpcrouter` | `unit` | `RpcRouter` without any transport: binary calls, fields of a later version skipped, authorization, unknown procedures, malformed messages, exceptions to codes, registrations with types of another method or package refused, concurrent calls |
+| `rpcapi` | `api` | the RPC API over HTTP in binary: both procedures, absent tax ID, unknown fields, Connect errors (400, 401, 404, 405, 415, JSON included), error bodies with quotes, control characters and non-ASCII text read with `QJsonDocument`, and an in-process `Backend` that listens on no port |
 | `invoicerepository` | `client` | `ApiConnection` + `InvoiceRepository` with both transports (HTTP with a token, and in process against a backend that listens on no port), same results: list, create, absent tax ID, the backend's validation message, a wrong token, an unreachable backend, results dropped for destroyed callers |
 | `amount` | `qml` | `Amount.js`: typed amounts with comma or dot, limits and rejections, and their display per locale |
 

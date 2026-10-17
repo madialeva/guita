@@ -13,7 +13,7 @@ void InProcTransport::call(const QString &procedure, const QByteArray &request, 
     const auto id = ++m_nextId;
     m_pending.insert(id, {context, std::move(done)});
 
-    RpcCall rpc{procedure.toStdString(), RpcCodec::Binary, request.toStdString(), {}};
+    RpcCall rpc{procedure.toStdString(), request.toStdString(), {}};
     m_pool.start([this, id, rpc = std::move(rpc)] {
         const auto result = m_backend.call(rpc);
         Reply reply{result.code == RpcCode::Ok,

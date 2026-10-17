@@ -174,6 +174,12 @@ build/native/bin/client
 build/native/bin/client --standalone
 ```
 
+The API speaks binary Protobuf. To call it by hand, `buf curl --schema
+src/proto --data '{}' http://127.0.0.1:8090/api/guita.v1.InvoiceService/ListInvoices`
+takes the request in JSON and prints the response in JSON, and `protoc
+--encode`/`--decode` convert between Protobuf's text format and binary (see
+[docs/architecture.md](docs/architecture.md), §4.3).
+
 The server reads `DB_CONN`, `HTTP_ADDRESS`, `HTTP_PORT`, `DOCROOT` and
 `API_TOKEN` from the environment. Until user authentication exists, `API_TOKEN`
 is an optional shared Bearer token for development (leave it empty for the web

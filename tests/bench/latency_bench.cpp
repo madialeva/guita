@@ -65,7 +65,7 @@ int main(int argc, char *argv[]) {
         return response;
     });
     const std::string request = v1::ListInvoicesRequest().SerializeAsString();
-    const RpcCall call{kProcedure, RpcCodec::Binary, request, {}};
+    const RpcCall call{kProcedure, request, {}};
 
     report("in process, direct", measure("in process, direct", 200000, [&] { (void)router.call(call); }));
 
@@ -89,7 +89,7 @@ int main(int argc, char *argv[]) {
     server.WebSocket("/ws", [&router](const httplib::Request &, httplib::ws::WebSocket &socket) {
         std::string message;
         while (socket.read(message) != httplib::ws::ReadResult::Fail) {
-            const auto result = router.call({kProcedure, RpcCodec::Binary, message, {}});
+            const auto result = router.call({kProcedure, message, {}});
             socket.send(result.payload.data(), result.payload.size());
         }
     });
