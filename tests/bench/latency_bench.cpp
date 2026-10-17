@@ -17,7 +17,8 @@
 // same router and a stub procedure (no database, so the transport's cost is
 // what is measured): the router called directly, an in-process call with the
 // pool hop and the event-queue return that InProcTransport uses, a POST with
-// keep-alive, and a WebSocket frame carrying the same bytes.
+// keep-alive (with an empty body and with a small one), and a WebSocket frame
+// carrying the same bytes.
 namespace v1 = guita::v1;
 using Clock = std::chrono::steady_clock;
 
@@ -103,6 +104,18 @@ int main(int argc, char *argv[]) {
         client.set_tcp_nodelay(true);
         report("HTTP POST, keep-alive", measure("HTTP POST, keep-alive", 20000, [&] {
             (void)client.Post(std::string("/api/") + kProcedure, request, "application/proto");
+        }));
+        // The empty ListInvoicesRequest above has no body; with one, cpp-httplib's
+        // client sends headers and body apart and the call costs ~6 us more.
+        // Unknown fields (15) make a body the same procedure accepts.
+        const std::string withBody("\x78\x01\x78\x01\x78\x01\x78\x01", 8);
+        if (const auto res = client.Post(std::string("/api/") + kProcedure, withBody, "application/proto");
+            !res || res->status != 200) {
+            std::fprintf(stderr, "the call with a body failed\n");
+            return 1;
+        }
+        report("HTTP POST, 8-byte body", measure("HTTP POST, 8-byte body", 20000, [&] {
+            (void)client.Post(std::string("/api/") + kProcedure, withBody, "application/proto");
         }));
     }
     {

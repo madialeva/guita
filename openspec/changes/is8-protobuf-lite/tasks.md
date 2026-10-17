@@ -48,9 +48,9 @@
 
 ## 5. Medición
 
-- [ ] 5.1 Ejecutar `bench_encoding` en nativo (preset `bench`) y en WASM (preset `wasm-bench`, en Chrome sin pantalla), con la comprobación de los bytes de referencia. Verificar que da resultados estables entre dos ejecuciones.
-- [ ] 5.2 Añadir a `bench_latency` una llamada con cuerpo. Verificar que da resultados estables entre dos ejecuciones.
-- [ ] 5.3 Medir `client.wasm` antes y después del cambio y documentar los resultados y su lectura en `docs/architecture.md` §4.5, conservando las cifras de Qt Protobuf como referencia.
+- [x] 5.1 Ejecutar `bench_encoding` en nativo (preset `bench`) y en WASM (preset `wasm-bench`, en Chrome sin pantalla), con la comprobación de los bytes de referencia. Verificar que da resultados estables entre dos ejecuciones.
+- [x] 5.2 Añadir a `bench_latency` una llamada con cuerpo. Verificar que da resultados estables entre dos ejecuciones.
+- [x] 5.3 Medir `client.wasm` antes y después del cambio y documentar los resultados y su lectura en `docs/architecture.md` §4.5, conservando las cifras de Qt Protobuf como referencia.
 
 ## 6. Integración
 

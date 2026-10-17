@@ -290,17 +290,28 @@ build/bench/bin/bench_latency            # --quick: a twentieth of the calls
 Results on an AMD Ryzen 5 5625U (12 threads), Linux, Release builds; the
 WebAssembly figures in Chrome 155. Stable within a few percent between runs.
 
-**Invoice lists, client side** (`bench_encoding`): JSON is the canonical proto3
-JSON the API also serves; "compressed" is a zlib stream at the default level,
-close to what gzip sends. Decoding compares the former client path (JSON to
-`QVariantList`) with the current one (binary to Qt Protobuf messages).
+**Invoice lists** (`bench_encoding`): JSON is the canonical proto3 JSON of the
+contract, as a JSON client would decode it (to `QVariantList`); "compressed"
+is a zlib stream at the default level, close to what gzip sends; Protobuf is
+the contract's code, the same in the backend and the client, on the lite
+runtime. Before measuring, the program checks the reference bytes of
+`tests/support/ProtoSamples.h`, also in WebAssembly. Times are medians of
+batches, because browser timers are coarse.
 
 | Invoices | Format | Bytes | Compressed | Encode native | Decode native | Encode WASM | Decode WASM |
 |---|---|---|---|---|---|---|---|
-| 1 000 | JSON | 79 904 | 11 603 | 2.1 ms | 1.1 ms | 5.1 ms | 1.9 ms |
-| 1 000 | Protobuf | 33 253 | 8 616 | 1.0 ms | 0.9 ms | 1.7 ms | 1.6 ms |
-| 10 000 | JSON | 828 822 | 119 907 | 21.6 ms | 15.2 ms | 52 ms | 19 ms |
-| 10 000 | Protobuf | 352 059 | 81 415 | 9.6 ms | 8.6 ms | 17 ms | 15 ms |
+| 1 000 | JSON | 79 904 | 11 603 | 2.1 ms | 1.1 ms | 5.4 ms | 1.9 ms |
+| 1 000 | Protobuf | 33 253 | 8 616 | 0.025 ms | 0.13 ms | 0.04 ms | 0.11 ms |
+| 10 000 | JSON | 828 822 | 119 907 | 22 ms | 15 ms | 54 ms | 19 ms |
+| 10 000 | Protobuf | 352 059 | 81 415 | 0.27 ms | 1.35 ms | 0.35 ms | 1.05 ms |
+
+The client first decoded with Qt Protobuf, a second generator of the contract:
+1.0 ms and 0.9 ms natively and 1.8 ms and 1.6 ms in WebAssembly for 1 000
+invoices, 9.9 ms and 8.6 ms natively and 17 ms and 15–16 ms in WebAssembly for
+10 000, to encode and to decode. A parallel ASN.1 contract in DER, generated
+with asn1c, was also measured on the same application (#7): it was 4 to 6 %
+larger than Protobuf (17 to 23 % compressed), faster than Qt Protobuf but 8
+to 10 times slower than protoc's code to encode, and was dropped.
 
 **Round trip of a small call per transport** (`bench_latency`, loopback, a
 stub procedure without database, so only the transport is measured):
@@ -308,24 +319,32 @@ stub procedure without database, so only the transport is measured):
 | Transport | p50 | p90 | p99 |
 |---|---|---|---|
 | `RpcRouter::call()` directly | 0.1 µs | 0.1 µs | 0.2 µs |
-| In process: pool thread + event queue (as `InProcTransport`) | 9.5 µs | 11 µs | 15 µs |
-| HTTP `POST`, keep-alive | 35 µs | 45 µs | 105 µs |
-| WebSocket frame, same bytes | 41 µs | 50 µs | 68 µs |
+| In process: pool thread + event queue (as `InProcTransport`) | 9.4 µs | 10 µs | 14 µs |
+| HTTP `POST`, keep-alive, empty body | 36 µs | 44 µs | 104 µs |
+| HTTP `POST`, keep-alive, 8-byte body | 41 µs | 52 µs | 107 µs |
+| WebSocket frame, same bytes as the empty body | 41 µs | 48 µs | 60 µs |
 
 **Size of `client.wasm`**: 27 725 237 bytes before the contract, 27 941 331
-with Qt Protobuf (+211 KiB, +0.8 %).
+with Qt Protobuf (+211 KiB), 28 886 336 with protoc's code on the full
+`libprotobuf` (0.9 MiB more, measured while making this change) and 27 938 849 on
+`libprotobuf-lite`: 2.4 KiB less than with Qt Protobuf, 0.8 % over no
+contract at all.
 
 Reading:
 
 - Protobuf messages are about 2.4 times smaller than JSON, and 1.3 to 1.5 times
-  smaller once compressed, since gzip already removes most of JSON's repetition.
-  Encoding is 2 to 3 times faster. Decoding gains less: 1.2 to 1.8 times
-  natively and 1.2 to 1.3 times in WebAssembly, where Qt Protobuf's decoder is
-  not much faster than `QJsonDocument`. The decisive gain is the typed
-  contract; speed and size come on top.
+  smaller once compressed, since gzip already removes most of JSON's
+  repetition.
+- protoc's code encodes 80 to 150 times faster than building JSON and decodes
+  8 to 18 times faster than `QJsonDocument`, and runs in WebAssembly at about
+  the speed it has natively. Compared with the former Qt Protobuf client, it
+  encodes 35 to 50 times faster and decodes 6 to 15 times faster; its
+  lite runtime costs no more in `client.wasm` than Qt Protobuf did.
 - The in-process transport costs about a quarter of HTTP on loopback, and
   opens no socket at all. A real call adds the database time (hundreds of
   microseconds), which dominates either way.
+- With cpp-httplib's client, a request with a body costs about 5 µs more than
+  one without, whatever its encoding: headers and body are written apart.
 - With cpp-httplib, a WebSocket frame is not faster than an HTTP request with
   keep-alive for request/response. The case for the planned persistent channel
   is server push and multiplexing, not the latency of one call, and an event
