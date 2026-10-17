@@ -41,7 +41,7 @@ Decidido con el usuario (opción B, tras comprobar la limitación de los `int64`
 ### 2. Contrato y su organización
 
 - `src/proto/guita/v1/invoice_service.proto`: `Invoice` (`id`, `customer`, `optional customer_tax_id`, `total_cents`), `ListInvoicesRequest`/`Response`, `CreateInvoiceRequest`/`Response` e `InvoiceService` con `ListInvoices` y `CreateInvoice`. Identificadores e importes son `int64`. Los nombres siguen el estilo `STANDARD` de buf (petición y respuesta propias por método, directorio igual al paquete).
-- `src/proto/buf.yaml` declara el módulo, el lint `STANDARD` y las reglas de compatibilidad `FILE`.
+- `src/proto/buf.yaml` declara el módulo, el lint `STANDARD` y las reglas de compatibilidad `WIRE_JSON`: protegen lo que necesitan clientes y servidores desplegados de otras versiones, en binario y en JSON (eliminar un campo exige reservar su número y su nombre; nunca se renumera, se cambia de tipo ni se renombra). `FILE`, más estricta, protege además el código fuente generado y prohíbe eliminar campos aunque se reserven, lo que contradice la regla de evolución del proyecto; se comprobó al verificar `scripts/check-contract.sh`.
 - `src/proto/CMakeLists.txt` define dos librerías: `contract` (código de `protoc`, enlaza `protobuf::libprotobuf`, solo en nativo) y `contract_qt` (`qt_add_protobuf`, enlaza `Qt6::Protobuf`, nativo y WASM). Sin la opción `QML`: QML no consume los mensajes directamente (decisión 6).
 - *Alternativa*: un `.proto` por mensaje; para dos métodos no aporta nada y buf admite crecer hacia varios ficheros sin cambiar el paquete.
 

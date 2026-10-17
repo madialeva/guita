@@ -83,7 +83,11 @@ QTP0004). Executables are written to `build/<preset>/bin`.
   `<Method>Response`). Before a version is released anything may change; after
   it, incompatible changes go to a new package (`guita.v2`).
 - `buf lint` and `buf format` (CTest `contract_lint`, `contract_format`) keep
-  the style; `buf breaking` checks compatibility with the development branch.
+  the style. Every change to `src/proto` also runs `scripts/check-contract.sh`
+  (`buf breaking` with the `WIRE_JSON` rules against the development branch,
+  `origin/develop/vX.Y.Z`), which must pass; the CI will run it on every PR.
+  `WIRE_JSON` protects deployed clients and servers of other versions in binary
+  and JSON; `FILE` is not used because it forbids even reserved removals.
 - `int64` fields are not accessible from QML (Qt Protobuf makes them
   non-scriptable): the client's repositories adapt messages for the views.
 

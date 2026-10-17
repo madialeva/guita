@@ -31,8 +31,8 @@
 
 ## 5. Gobierno del contrato
 
-- [ ] 5.1 Crear `scripts/check-contract.sh` (`buf breaking` contra la rama de desarrollo, sin error si esta aún no tiene contrato); verificar que pasa con el contrato actual y que falla al renumerar o eliminar un campo sin reservarlo en una copia de prueba
-- [ ] 5.2 Documentar el flujo de evolución del contrato (AGENTS.md y `docs/architecture.md`); verificar que las órdenes documentadas funcionan tal cual
+- [x] 5.1 Crear `scripts/check-contract.sh` (`buf breaking` contra la rama de desarrollo, sin error si esta aún no tiene contrato); verificar que pasa con el contrato actual y que falla al renumerar o eliminar un campo sin reservarlo en una copia de prueba
+- [x] 5.2 Documentar el flujo de evolución del contrato (AGENTS.md y `docs/architecture.md`); verificar que las órdenes documentadas funcionan tal cual
 
 ## 6. Medición
 

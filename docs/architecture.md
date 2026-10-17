@@ -94,6 +94,23 @@ Both produce the same bytes; the client classes live in the extra namespace
 `qtc` because the standalone client links both. Generated headers are
 included as `<guita/v1/invoice_service.pb.h>` (backend) and
 `<guita/v1/invoice_service.qpb.h>` (client).
+
+The contract evolves under rules that keep deployed clients and servers of
+other versions working, in binary and in JSON:
+
+- never reuse, renumber, retype or rename a field; removed fields reserve
+  their number and name (`reserved`); add instead of changing meanings;
+- one request and one response message per method;
+- before a version is released anything may change; after it, incompatible
+  changes go to a new package (`guita.v2`), served next to the old one.
+
+`buf lint` (`STANDARD` rules) and `buf format` run as CTest tests.
+`scripts/check-contract.sh [<git ref>]` runs `buf breaking` with the
+`WIRE_JSON` rules against the development branch (by default
+`origin/develop/vX.Y.Z`, from the CMake version); when that branch has no
+contract yet there is nothing to compare. The CI will run it on every pull
+request. The stricter `FILE` rules are not used: they protect the generated
+source code and forbid even reserved removals.
 Project headers are included with angle brackets from `src/`
 (`<backend/core/InvoiceService.h>`, `<client/ApiConnection.h>`). The whole
 project is C++23. Executables are written to `build/<preset>/bin`.
