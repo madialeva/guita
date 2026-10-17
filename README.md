@@ -86,7 +86,7 @@ lives in the backend. See
 | libpq and zlib development files | — | libpqxx, cpp-httplib |
 
 Both Qt kits need Qt Quick, Qt Quick Controls, Qt Network, the Linguist tools
-and the `qttasktree` and `qtgrpc` (Qt Protobuf) modules.
+and the `qttasktree` module.
 
 ### To run
 

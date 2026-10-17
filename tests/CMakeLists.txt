@@ -43,8 +43,8 @@ target_link_libraries(guita_test_support PUBLIC libpqxx::pqxx)
 # Test harness
 guita_add_test(testdatabase LABELS db DATABASE)
 
-# Contract: the two generators write and read the same bytes
-guita_add_test(contract LABELS unit LIBS contract contract_qt Qt6::Protobuf)
+# Contract: reference bytes of its messages (also checked in WebAssembly by bench_encoding)
+guita_add_test(contract LABELS unit LIBS contract)
 
 # Backend without database
 guita_add_test(invoiceservice LABELS unit LIBS core)
@@ -63,7 +63,7 @@ guita_add_test(rpcapi LABELS api LIBS api contract httplib::httplib DATABASE)
 # client executable that backs the QML module
 set(GUITA_CLIENT_DIR ${PROJECT_SOURCE_DIR}/src/client)
 guita_add_test(invoicerepository LABELS client
-    LIBS api contract_qt Qt6::Network Qt6::Qml Qt6::Protobuf
+    LIBS api contract Qt6::Network Qt6::Qml
     SOURCES ${GUITA_CLIENT_DIR}/ApiConnection.h ${GUITA_CLIENT_DIR}/ApiConnection.cpp
             ${GUITA_CLIENT_DIR}/ApiTransport.h
             ${GUITA_CLIENT_DIR}/HttpTransport.h ${GUITA_CLIENT_DIR}/HttpTransport.cpp

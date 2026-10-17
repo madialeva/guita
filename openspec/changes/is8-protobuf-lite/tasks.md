@@ -25,16 +25,16 @@
 
 ## 3. Cliente sobre los mensajes de `protoc`
 
-- [ ] 3.1 `ApiConnection::call<Response>()` con `MessageLite` e `InvoiceRepository` con los mensajes de `guita::v1`; enlazar `contract` en el cliente, nativo y WASM. Verificar que el cliente compila en los dos presets y que `client_qmllint` sigue limpio.
-- [ ] 3.2 Retirar Qt Protobuf:
+- [x] 3.1 `ApiConnection::call<Response>()` con `MessageLite` e `InvoiceRepository` con los mensajes de `guita::v1`; enlazar `contract` en el cliente, nativo y WASM. Verificar que el cliente compila en los dos presets y que `client_qmllint` sigue limpio.
+- [x] 3.2 Retirar Qt Protobuf:
   - `contract_qt`, `qt_add_protobuf()` y el componente `Protobuf` de Qt;
   - `qtgrpc` en `scripts/setup-qt.sh`;
   - en las pruebas y en `bench_encoding`, que pasa a los mensajes de `protoc`.
 
   Reescribir la suite `contract` con los bytes de referencia de `tests/support/ProtoSamples.h`, las idas y vueltas y los campos desconocidos. Verificar que ningún objetivo enlaza `Qt6::Protobuf` y que `ctest --preset native -L unit` pasa.
-- [ ] 3.3 Adaptar la suite `invoicerepository` a los nuevos mensajes, con los dos transportes. Verificar con `ctest --preset native -L client`.
-- [ ] 3.4 Verificar en Xvfb que los modos standalone, conectado y web (WASM) guardan y listan facturas como antes, con y sin NIF, y que el standalone no escucha en ningún puerto.
-- [ ] 3.5 Documentar el cliente y el contrato generado una vez (`docs/architecture.md` §3, §5 y §12, AGENTS.md). Verificar que no queda ninguna mención a Qt Protobuf fuera de la explicación de por qué se dejó.
+- [x] 3.3 Adaptar la suite `invoicerepository` a los nuevos mensajes, con los dos transportes. Verificar con `ctest --preset native -L client`.
+- [x] 3.4 Verificar en Xvfb que los modos standalone, conectado y web (WASM) guardan y listan facturas como antes, con y sin NIF, y que el standalone no escucha en ningún puerto.
+- [x] 3.5 Documentar el cliente y el contrato generado una vez (`docs/architecture.md` §3, §5 y §12, AGENTS.md). Verificar que no queda ninguna mención a Qt Protobuf fuera de la explicación de por qué se dejó.
 
 ## 4. Lite
 

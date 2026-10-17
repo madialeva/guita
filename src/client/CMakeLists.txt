@@ -12,7 +12,7 @@ qt_add_qml_module(client
 # registration includes each header by its bare file name, hence this directory
 # as an extra private include directory
 target_include_directories(client PRIVATE ${GUITA_INCLUDE_ROOT} ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(client PRIVATE Qt6::Quick Qt6::Network Qt6::Protobuf contract_qt)
+target_link_libraries(client PRIVATE Qt6::Quick Qt6::Network contract)
 
 # Languages from qt_standard_project_setup; catalogs embedded under :/i18n
 qt_add_translations(TARGETS client
