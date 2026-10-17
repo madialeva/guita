@@ -147,6 +147,15 @@ private slots:
         QCOMPARE(res->get_header_value("Allow"), std::string("POST"));
     }
 
+    void noLongerServesTheRestRoutes() {
+        auto res = m_client->Get("/api/invoices", auth());
+        QVERIFY(res);
+        QCOMPARE(res->status, 404);
+        res = m_client->Post("/api/invoices", auth(), R"({"customer":"A","totalCents":1})", "application/json");
+        QVERIFY(res);
+        QCOMPARE(res->status, 404);
+    }
+
     void servesInProcessWithoutListening() {
         // The standalone backend: no HTTP options, calls through Backend::call()
         const int listening = listeningTcpSockets();

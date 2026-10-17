@@ -2,18 +2,16 @@
 # Builds and installs the backend libraries and tools in the user's directory (no sudo):
 #   - libpqxx       C++ client for PostgreSQL (static, PIC: linked into the client too)
 #   - cpp-httplib   embedded HTTP server (header-only), with zlib compression
-#   - glaze         JSON with compile-time reflection (header-only, C++23)
 #   - protobuf      C++ library and protoc for the contract (static, PIC, with abseil)
 #   - buf           lint and breaking-change checks of the contract (binary)
 #
-# System requirements: g++ with C++23 (GCC 13+), cmake 3.31+, ninja, git, libpq (libpq5-devel /
+# System requirements: g++ with C++23 (GCC 13+), cmake 3.21+, ninja, git, libpq (libpq5-devel /
 # libpq-devel) and zlib (devel).
 #
 # Variables:
 #   SOFTWARE_DIR         root of the local dependencies  [~/software]
 #   LIBPQXX_VERSION      libpqxx tag                     [8.0.2]
 #   HTTPLIB_VERSION      cpp-httplib tag (without "v")   [0.61.0]
-#   GLAZE_VERSION        glaze tag (without "v")         [9.0.0]
 #   PROTOBUF_VERSION     protobuf tag (without "v")      [36.2]
 #   BUF_VERSION          buf release (without "v")       [1.74.0]
 set -euo pipefail
@@ -21,7 +19,6 @@ set -euo pipefail
 SOFTWARE_DIR="${SOFTWARE_DIR:-$HOME/software}"
 LIBPQXX_VERSION="${LIBPQXX_VERSION:-8.0.2}"
 HTTPLIB_VERSION="${HTTPLIB_VERSION:-0.61.0}"
-GLAZE_VERSION="${GLAZE_VERSION:-9.0.0}"
 PROTOBUF_VERSION="${PROTOBUF_VERSION:-36.2}"
 BUF_VERSION="${BUF_VERSION:-1.74.0}"
 SRC="$SOFTWARE_DIR/src"
@@ -57,11 +54,6 @@ build "cpp-httplib-$HTTPLIB_VERSION" "$SOFTWARE_DIR/cpp-httplib-$HTTPLIB_VERSION
     -DHTTPLIB_COMPILE=OFF -DHTTPLIB_REQUIRE_ZLIB=ON \
     -DHTTPLIB_USE_OPENSSL_IF_AVAILABLE=OFF \
     -DHTTPLIB_USE_BROTLI_IF_AVAILABLE=OFF -DHTTPLIB_USE_ZSTD_IF_AVAILABLE=OFF
-
-# Header-only; its CMake install requires CMake 3.31+
-fetch https://github.com/stephenberry/glaze.git "v$GLAZE_VERSION" "glaze-$GLAZE_VERSION"
-build "glaze-$GLAZE_VERSION" "$SOFTWARE_DIR/glaze-$GLAZE_VERSION" \
-    -DBUILD_TESTING=OFF -Dglaze_DEVELOPER_MODE=OFF -Dglaze_INSTALL=ON
 
 # abseil comes as a submodule and is installed next to protobuf. Both are built
 # with the project's C++ standard, so that abseil and the project agree on the

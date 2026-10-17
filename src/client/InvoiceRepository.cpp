@@ -1,8 +1,19 @@
 #include <client/InvoiceRepository.h>
-#include <QJsonArray>
-#include <QJsonDocument>
-#include <QJsonObject>
-#include <QNetworkReply>
+#include <guita/v1/invoice_service.qpb.h>
+
+namespace v1 = qtc::guita::v1;
+
+namespace {
+constexpr auto kList = "guita.v1.InvoiceService/ListInvoices";
+constexpr auto kCreate = "guita.v1.InvoiceService/CreateInvoice";
+
+InvoiceRow toRow(const v1::Invoice &invoice) {
+    // customerTaxId() requires the optional field to be present
+    const bool hasTaxId = invoice.hasCustomerTaxId();
+    return {double(invoice.id_proto()), invoice.customer(), hasTaxId,
+            hasTaxId ? invoice.customerTaxId() : QString(), double(invoice.totalCents())};
+}
+}
 
 void InvoiceRepository::setConnection(ApiConnection *connection) {
     if (m_connection == connection) return;
@@ -10,30 +21,28 @@ void InvoiceRepository::setConnection(ApiConnection *connection) {
     emit connectionChanged();
 }
 
-void InvoiceRepository::create(const QVariantMap &invoice) {
+void InvoiceRepository::create(const QString &customer, const QString &customerTaxId, double totalCents) {
     if (!m_connection) return;
-    auto *reply = m_connection->post("invoices", QJsonDocument(QJsonObject::fromVariantMap(invoice)));
-    connect(reply, &QNetworkReply::finished, this, [this, reply] {
-        reply->deleteLater();
-        const auto body = reply->readAll();
-        if (const auto error = ApiConnection::errorMessage(reply, body); !error.isEmpty()) {
-            emit failed(error);
-            return;
-        }
-        emit created(QJsonDocument::fromJson(body).object().toVariantMap());
-    });
+    v1::CreateInvoiceRequest request;
+    request.setCustomer(customer);
+    if (!customerTaxId.isEmpty())
+        request.setCustomerTaxId(customerTaxId);
+    request.setTotalCents(qint64(totalCents));
+
+    m_connection->call<v1::CreateInvoiceResponse>(kCreate, request, this,
+        [this](const v1::CreateInvoiceResponse &response) { emit created(toRow(response.invoice())); },
+        [this](const QString &error) { emit failed(error); });
 }
 
 void InvoiceRepository::list() {
     if (!m_connection) return;
-    auto *reply = m_connection->get("invoices");
-    connect(reply, &QNetworkReply::finished, this, [this, reply] {
-        reply->deleteLater();
-        const auto body = reply->readAll();
-        if (const auto error = ApiConnection::errorMessage(reply, body); !error.isEmpty()) {
-            emit failed(error);
-            return;
-        }
-        emit listed(QJsonDocument::fromJson(body).array().toVariantList());
-    });
+    m_connection->call<v1::ListInvoicesResponse>(kList, v1::ListInvoicesRequest(), this,
+        [this](const v1::ListInvoicesResponse &response) {
+            QList<InvoiceRow> rows;
+            rows.reserve(response.invoices().size());
+            for (const auto &invoice : response.invoices())
+                rows.append(toRow(invoice));
+            emit listed(rows);
+        },
+        [this](const QString &error) { emit failed(error); });
 }

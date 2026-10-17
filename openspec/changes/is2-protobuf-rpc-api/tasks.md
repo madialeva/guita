@@ -22,12 +22,12 @@
 
 ## 4. Cliente
 
-- [ ] 4.1 `ApiTransport` con `HttpTransport` (POST de procedimiento, `application/proto`, `Connect-Protocol-Version`, errores de Connect) e `InProcTransport` (`Backend::call()` en `QThreadPool`, resultado por la cola de eventos), y `ApiConnection` sobre ellos; el arranque standalone de `main.cpp` pasa a un `Backend` sin HTTP ni token con espera del pool al cerrar; verificar que el cliente compila en nativo y en WASM (solo `HttpTransport`)
-- [ ] 4.2 `InvoiceRepository` con los mensajes de Qt Protobuf y el tipo de valor `InvoiceRow`; adaptar `Main.qml` a `InvoiceRow` y a `create()` con argumentos tipados; verificar que `client_qmllint` sigue limpio
-- [ ] 4.3 Retirar las rutas REST (`InvoiceRoutes`), los helpers JSON de `Http`, la suite `restapi` y glaze (código, CMake, presets, `scripts/build-deps.sh` y documentación); verificar que `api` ya no enlaza glaze y que una petición a `/api/invoices` responde 404
-- [ ] 4.4 Adaptar la suite `invoicerepository` (`client`) a `InvoiceRow` y a la nueva firma de `create()`, y ejecutarla con los dos transportes comprobando que los resultados coinciden; verificar con `ctest --preset native -L client`
-- [ ] 4.5 Verificar en Xvfb que los modos standalone, conectado y web (WASM) guardan y listan facturas como antes, con y sin NIF, y con `ss` que el standalone no escucha en ningún puerto
-- [ ] 4.6 Documentar los transportes y el principio revisado (AGENTS.md, `docs/architecture.md` §1, §2 y §6, README); verificar que las órdenes documentadas funcionan tal cual
+- [x] 4.1 `ApiTransport` con `HttpTransport` (POST de procedimiento, `application/proto`, `Connect-Protocol-Version`, errores de Connect) e `InProcTransport` (`Backend::call()` en `QThreadPool`, resultado por la cola de eventos), y `ApiConnection` sobre ellos; el arranque standalone de `main.cpp` pasa a un `Backend` sin HTTP ni token con espera del pool al cerrar; verificar que el cliente compila en nativo y en WASM (solo `HttpTransport`)
+- [x] 4.2 `InvoiceRepository` con los mensajes de Qt Protobuf y el tipo de valor `InvoiceRow`; adaptar `Main.qml` a `InvoiceRow` y a `create()` con argumentos tipados; verificar que `client_qmllint` sigue limpio
+- [x] 4.3 Retirar las rutas REST (`InvoiceRoutes`), los helpers JSON de `Http`, la suite `restapi` y glaze (código, CMake, presets, `scripts/build-deps.sh` y documentación); verificar que `api` ya no enlaza glaze y que una petición a `/api/invoices` responde 404
+- [x] 4.4 Adaptar la suite `invoicerepository` (`client`) a `InvoiceRow` y a la nueva firma de `create()`, y ejecutarla con los dos transportes comprobando que los resultados coinciden; verificar con `ctest --preset native -L client`
+- [x] 4.5 Verificar en Xvfb que los modos standalone, conectado y web (WASM) guardan y listan facturas como antes, con y sin NIF, y con `ss` que el standalone no escucha en ningún puerto
+- [x] 4.6 Documentar los transportes y el principio revisado (AGENTS.md, `docs/architecture.md` §1, §2 y §6, README); verificar que las órdenes documentadas funcionan tal cual
 
 ## 5. Gobierno del contrato
 

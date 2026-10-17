@@ -1,7 +1,6 @@
 #include <backend/api/Backend.h>
 #include <backend/api/HttpRpcTransport.h>
 #include <backend/api/InvoiceProcedures.h>
-#include <backend/api/InvoiceRoutes.h>
 #include <backend/api/RpcRouter.h>
 #include <backend/core/Database.h>
 #include <backend/core/InvoiceService.h>
@@ -48,7 +47,6 @@ struct Backend::Impl {
             });
         }
         addRpcRoutes(http, router);
-        addInvoiceRoutes(http, invoices, options.authorizer);   // REST, until the client moves to RPC
     }
 
     BackendOptions  options;

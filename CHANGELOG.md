@@ -14,11 +14,11 @@ First version: a proof of concept of the architecture, to be released as 0.1.0.
 - Qt Quick (QML) client that runs in the browser compiled to WebAssembly and
   as a native desktop application from the same code.
 - Three run modes: web, desktop connected to a remote server, and desktop
-  standalone with the backend embedded in the client process on `127.0.0.1`,
-  with a random port and a per-launch token.
+  standalone with the backend embedded in the client process and called in
+  process, so that it opens no network port and needs no token.
 - C++ backend without framework or ORM: embedded HTTP server (cpp-httplib),
-  PostgreSQL access through prepared statements (libpqxx) and JSON with
-  compile-time reflection (glaze).
+  PostgreSQL access through prepared statements (libpqxx) and the contract's
+  binary and JSON encodings (protobuf).
 - Sample invoicing domain: create and list invoices (customer, optional tax ID
   and total).
 - Typed client-backend contract in Protobuf (`src/proto`, package `guita.v1`),

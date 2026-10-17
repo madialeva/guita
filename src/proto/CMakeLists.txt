@@ -18,7 +18,6 @@ if(NOT EMSCRIPTEN)
     target_link_libraries(contract PUBLIC protobuf::libprotobuf)
 endif()
 
-find_package(Qt6 REQUIRED COMPONENTS Protobuf)
 qt_add_protobuf(contract_qt
     PROTO_FILES ${GUITA_PROTO_FILES}
     PROTO_INCLUDES ${CMAKE_CURRENT_SOURCE_DIR}
