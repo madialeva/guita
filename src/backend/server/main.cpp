@@ -37,10 +37,12 @@ int main() {
         Backend backend({
             .connectionString = env("DB_CONN", "host=127.0.0.1 dbname=guita user=guita password=guita"),
             .authorizer = tokenAuthorizer(token),
-            .address = env("HTTP_ADDRESS", "0.0.0.0"),
-            .port = std::stoi(env("HTTP_PORT", "8090")),
-            .docroot = env("DOCROOT", "./web"),
-            .accessLog = true,
+            .http = HttpOptions{
+                .address = env("HTTP_ADDRESS", "0.0.0.0"),
+                .port = std::stoi(env("HTTP_PORT", "8090")),
+                .docroot = env("DOCROOT", "./web"),
+                .accessLog = true,
+            },
         });
 
         if (!backend.start()) {

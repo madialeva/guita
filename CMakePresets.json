@@ -8,7 +8,7 @@
       "binaryDir": "${sourceDir}/build/native",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
-        "CMAKE_PREFIX_PATH": "$env{HOME}/software/Qt/6.12.0/gcc_64;$env{HOME}/software/libpqxx-8.0.2;$env{HOME}/software/cpp-httplib-0.61.0;$env{HOME}/software/glaze-9.0.0"
+        "CMAKE_PREFIX_PATH": "$env{HOME}/software/Qt/6.12.0/gcc_64;$env{HOME}/software/libpqxx-8.0.2;$env{HOME}/software/cpp-httplib-0.61.0;$env{HOME}/software/protobuf-36.2;$env{HOME}/software/buf-1.74.0"
       }
     },
     {
@@ -23,20 +23,66 @@
       },
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
-        "QT_HOST_PATH": "$env{HOME}/software/Qt/6.12.0/gcc_64"
+        "QT_HOST_PATH": "$env{HOME}/software/Qt/6.12.0/gcc_64",
+        "QT_ADDITIONAL_HOST_PACKAGES_PREFIX_PATH": "$env{HOME}/software/protobuf-36.2"
+      }
+    },
+    {
+      "name": "bench",
+      "displayName": "Measurements (native, Release)",
+      "inherits": "native",
+      "binaryDir": "${sourceDir}/build/bench",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "GUITA_BENCH": "ON",
+        "BUILD_TESTING": "OFF"
+      }
+    },
+    {
+      "name": "wasm-bench",
+      "displayName": "Measurements (WebAssembly, Release)",
+      "inherits": "wasm",
+      "binaryDir": "${sourceDir}/build/wasm-bench",
+      "cacheVariables": {
+        "GUITA_BENCH": "ON"
       }
     }
   ],
   "buildPresets": [
-    { "name": "native", "configurePreset": "native" },
-    { "name": "wasm", "configurePreset": "wasm" }
+    {
+      "name": "native",
+      "configurePreset": "native"
+    },
+    {
+      "name": "wasm",
+      "configurePreset": "wasm"
+    },
+    {
+      "name": "bench",
+      "configurePreset": "bench",
+      "targets": [
+        "bench_encoding",
+        "bench_latency"
+      ]
+    },
+    {
+      "name": "wasm-bench",
+      "configurePreset": "wasm-bench",
+      "targets": [
+        "bench_encoding"
+      ]
+    }
   ],
   "testPresets": [
     {
       "name": "native",
       "configurePreset": "native",
-      "output": { "outputOnFailure": true },
-      "execution": { "noTestsAction": "error" }
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      }
     }
   ]
 }

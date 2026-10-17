@@ -1,0 +1,14 @@
+# buf module of the client-backend contract: style rules (lint) and the
+# compatibility rules checked by scripts/check-contract.sh (breaking).
+# WIRE_JSON protects what deployed clients and servers of other versions rely
+# on, in binary and in JSON: removed fields must reserve their number and name,
+# and fields are never renumbered, retyped or renamed
+version: v2
+modules:
+  - path: .
+lint:
+  use:
+    - STANDARD
+breaking:
+  use:
+    - WIRE_JSON

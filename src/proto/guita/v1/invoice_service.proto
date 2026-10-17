@@ -1,0 +1,44 @@
+// Contract between the Guita client and backend: the single source of truth
+// of the API. Evolution rules: never reuse or renumber a field, reserve the
+// numbers and names of removed fields, add instead of changing, and use a new
+// package (guita.v2) for incompatible changes once a version is released.
+syntax = "proto3";
+
+package guita.v1;
+
+// An invoice of the sample billing domain.
+message Invoice {
+  // Identifier assigned by the backend.
+  int64 id = 1;
+  string customer = 2;
+  // Customer tax ID; absent when the invoice has none.
+  optional string customer_tax_id = 3;
+  // Total in cents, the integer minor units of the currency.
+  int64 total_cents = 4;
+}
+
+message ListInvoicesRequest {}
+
+message ListInvoicesResponse {
+  // Every invoice, in creation order.
+  repeated Invoice invoices = 1;
+}
+
+message CreateInvoiceRequest {
+  // Required.
+  string customer = 1;
+  // An empty tax ID is stored as absent.
+  optional string customer_tax_id = 2;
+  // Between 0 and 999999999999 (numeric(12,2) in the database).
+  int64 total_cents = 3;
+}
+
+message CreateInvoiceResponse {
+  Invoice invoice = 1;
+}
+
+// Invoices: list them and create new ones.
+service InvoiceService {
+  rpc ListInvoices(ListInvoicesRequest) returns (ListInvoicesResponse);
+  rpc CreateInvoice(CreateInvoiceRequest) returns (CreateInvoiceResponse);
+}

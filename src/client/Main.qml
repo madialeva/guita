@@ -40,7 +40,10 @@ ApplicationWindow {
         spacing: 8
 
         Label {
-            text: qsTr("%1 mode · %2").arg(window.modeName).arg(ApiConnection.baseUrl)
+            // In process there is no URL: the backend runs inside the application
+            text: ApiConnection.mode === ApiConnection.Standalone
+                  ? qsTr("%1 mode · in process").arg(window.modeName)
+                  : qsTr("%1 mode · %2").arg(window.modeName).arg(ApiConnection.baseUrl)
             opacity: 0.6
             font.pixelSize: 12
         }
@@ -63,8 +66,7 @@ ApplicationWindow {
                         status.text = qsTr("The total must be an amount such as 1234.50")
                         return
                     }
-                    invoices.create({ customer: customer.text, customerTaxId: customerTaxId.text,
-                                      totalCents: cents })
+                    invoices.create(customer.text, customerTaxId.text, cents)
                 }
             }
         }
@@ -83,12 +85,12 @@ ApplicationWindow {
                 model: []
                 delegate: ItemDelegate {
                     id: row
-                    required property var modelData
+                    required property invoiceRow modelData
                     width: ListView.view.width
                     contentItem: RowLayout {
                         Label {
                             text: "#" + row.modelData.id + "  " + row.modelData.customer
-                                  + (row.modelData.customerTaxId ? "  (" + row.modelData.customerTaxId + ")" : "")
+                                  + (row.modelData.hasCustomerTaxId ? "  (" + row.modelData.customerTaxId + ")" : "")
                             elide: Text.ElideRight
                             Layout.fillWidth: true
                         }

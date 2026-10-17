@@ -4,9 +4,10 @@
 
 Guita is a proof of concept for a C++-only architecture where a single code
 base produces a Qt Quick (QML) client that runs both as a WebAssembly web app
-and as a native desktop application, talking HTTP/JSON to a C++ backend over
+and as a native desktop application, talking to a C++ backend over
 PostgreSQL built from small libraries instead of a framework: cpp-httplib
-(embedded HTTP server), libpqxx (PostgreSQL, no ORM) and glaze (JSON). The technical design is described in
+(embedded HTTP server), libpqxx (PostgreSQL, no ORM) and protobuf (the
+contract, served as RPC). The technical design is described in
 `docs/architecture.md`; consult it before changing how the pieces fit together
 and keep it up to date when they change.
 
@@ -14,19 +15,20 @@ and keep it up to date when they change.
 |---|---|---|
 | Web | Qt/QML compiled to WebAssembly | remote `server`, which also serves the WASM files |
 | Desktop connected | native Qt/QML | remote `server` (`API_URL`) |
-| Desktop standalone | native Qt/QML (`--standalone`) | backend embedded in the client process, `127.0.0.1` with random port and token |
+| Desktop standalone | native Qt/QML (`--standalone`) | backend embedded in the client process, called in process: no network, no port, no token |
 
 Principles that every change must keep:
 
-- The client always talks HTTP/JSON to the backend and never knows whether it
-  is remote or embedded.
+- The client always talks to the backend through the RPC contract and never
+  knows which transport carries the calls: HTTP in the web and connected modes,
+  in process in standalone mode. No shortcut skips the contract.
 - All business logic lives in the backend (`src/backend/`); the client only
   presents and validates for user experience. The backend repeats every
   critical validation: the WASM client is in the user's hands.
 - The backend never depends on Qt and the client never accesses the database.
 - Same engine (PostgreSQL), same SQL and same migrations in every mode.
 
-Use C++23, Qt Quick (QML), cpp-httplib, libpqxx 8, glaze, PostgreSQL, CMake,
+Use C++23, Qt Quick (QML), cpp-httplib, libpqxx 8, Protobuf, PostgreSQL, CMake,
 Ninja and GCC. The backend uses no framework and no ORM. Qt is
 6.12 LTS everywhere (desktop kit for the native client, `wasm_singlethread` kit
 for the web client, both from `~/software/Qt`; CMake requires 6.12): never add
@@ -44,9 +46,10 @@ source code lives in `src/`, grouped by side of the architecture:
 
 ```text
 src/
+├── proto/            client-backend contract (Protobuf, package guita.v1, buf module)
 ├── backend/          backend, native only (never built for WASM)
 │   ├── core/         plain C++ + libpqxx: entities, stores (SQL), pool, migrations, services
-│   ├── api/          HTTP server, REST routes and Backend, shared by server and client
+│   ├── api/          RPC router, its transports and Backend, shared by server and client
 │   └── server/       server executable
 └── client/           Qt/QML client (native + WASM): API connection, repositories, views
     └── translations/ Qt Linguist catalogs (English source)
@@ -61,11 +64,32 @@ The root `CMakeLists.txt` adds `src/backend` only when not building for
 Emscripten.
 
 CMake mirrors the layers: `src/backend/CMakeLists.txt` defines `core` (static,
-libpqxx), `api` (static, cpp-httplib + glaze, both private) and the `server`
+libpqxx), `api` (static, the RPC router; cpp-httplib private) and the `server`
 executable; `src/client/CMakeLists.txt` defines the `client` executable, which
 backs the `Guita` QML module (QML views plus the C++ types they use) next to
 its QML files, so the module needs no per-directory `qmldir` (Qt policy
 QTP0004). Executables are written to `build/<preset>/bin`.
+
+## Contract
+
+- `src/proto/` is the single definition of the client-backend API: messages
+  and services in Protobuf (package `guita.v1`), generated with `protoc` for
+  the backend (`contract`, `guita::v1`, never Qt) and with Qt Protobuf for the
+  client (`contract_qt`, `qtc::guita::v1`, native and WASM). Neither side
+  defines API message shapes by hand.
+- Evolution rules: never reuse or renumber a field; reserve the numbers and
+  names of removed fields; add instead of changing types or meanings; one
+  request and one response message per method (`<Method>Request`,
+  `<Method>Response`). Before a version is released anything may change; after
+  it, incompatible changes go to a new package (`guita.v2`).
+- `buf lint` and `buf format` (CTest `contract_lint`, `contract_format`) keep
+  the style. Every change to `src/proto` also runs `scripts/check-contract.sh`
+  (`buf breaking` with the `WIRE_JSON` rules against the development branch,
+  `origin/develop/vX.Y.Z`), which must pass; the CI will run it on every PR.
+  `WIRE_JSON` protects deployed clients and servers of other versions in binary
+  and JSON; `FILE` is not used because it forbids even reserved removals.
+- `int64` fields are not accessible from QML (Qt Protobuf makes them
+  non-scriptable): the client's repositories adapt messages for the views.
 
 ## Backend
 
@@ -85,12 +109,14 @@ QTP0004). Executables are written to `build/<preset>/bin`.
   32-bit).
 - Optimistic locking is explicit: updates check and increment `version`
   (`WHERE id = $1 AND version = $2`) and treat zero affected rows as a conflict.
-- REST routes are registered per resource (`addInvoiceRoutes()`) and wrapped
-  with `http::guarded()`. JSON shapes are plain structs serialized by glaze
-  reflection (member names = JSON field names); unknown fields are ignored.
-  Errors are `{"error": "..."}` with the proper status code (400 validation,
-  401 authentication, 405 method, 415 non-JSON body, 500 unexpected).
-- `backend/api/Backend.h` must not include cpp-httplib, libpqxx or glaze
+- Procedures are registered per service on `RpcRouter`
+  (`addInvoiceProcedures()`) with `add<Request, Response>()`, which checks them
+  against the contract at startup. Handlers receive decoded messages, convert
+  them to and from `core`'s structs and throw `std::invalid_argument` for
+  validation errors; the router turns exceptions into Connect codes. Neither
+  handlers nor `core` know the transport: HTTP statuses exist only in
+  `HttpRpcTransport`.
+- `backend/api/Backend.h` must not include cpp-httplib, libpqxx or protobuf
   (pimpl): the client only needs that interface to embed the backend.
 - Authentication is a shared Bearer token for now (random per launch in
   standalone mode, `API_TOKEN` on the server, for development). Authentication
@@ -104,6 +130,13 @@ context properties, `qmlRegister*` calls or objects injected from `main.cpp`:
 
 - Per-view objects (repositories, controllers) use `QML_ELEMENT` and are
   instantiated by the view that owns them (`Main.qml` creates `InvoiceRepository`).
+  Repositories call procedures through `ApiConnection::call<Response>()` with
+  the contract's Qt Protobuf messages and hand the views typed value types
+  (`InvoiceRow`, `QML_VALUE_TYPE`), never `QVariantMap`.
+- `ApiConnection` delegates to an `ApiTransport`: `HttpTransport`
+  (`QNetworkAccessManager`, binary Connect RPC) or `InProcTransport` (native
+  only: `Backend::call()` on a pool thread, results back through the event
+  queue; its destructor waits for the calls in flight). Neither is visible to QML.
 - Application-wide services are `QML_SINGLETON` with a static `create()`
   (`ApiConnection`). Qt prefers a default constructor over `create()`, so such
   a class must not be default-constructible.
@@ -137,6 +170,9 @@ context properties, `qmlRegister*` calls or objects injected from `main.cpp`:
 - API responses are checked by parsing them with Qt (`QJsonDocument`), not with
   the library the code under test uses.
 - Keep the suite table in `docs/architecture.md` (§10.3) up to date.
+- Measurements live in `tests/bench`, outside `ctest`: built in Release with
+  the `bench` and `wasm-bench` presets; their results are documented in
+  `docs/architecture.md` (§4.5) and are refreshed when what they measure changes.
 
 ## OpenSpec
 
@@ -169,8 +205,8 @@ migrations in `src/backend/core/Migrations.cpp`, applied at startup by both the 
 standalone mode inside one transaction guarded by `pg_advisory_xact_lock`.
 Never edit a released migration; add a new one (one statement per migration).
 Table and column names are English `snake_case`; every table has a
-`bigserial` `id` and an integer `version` for optimistic locking. JSON field names of the REST API are
-English `camelCase`; treat them as a public contract once released.
+`bigserial` `id` and an integer `version` for optimistic locking. The contract's field names are
+English `snake_case` (lowerCamelCase in its JSON encoding); treat the contract as public once released.
 
 ## Language and files
 
@@ -205,14 +241,15 @@ include directory; project code never relies on it.
 
 - Dependencies that do not come from the system are installed without sudo in
   `~/software` (`SOFTWARE_DIR` in the scripts; the CMake presets assume
-  `~/software`): libpqxx 8.0.2, cpp-httplib 0.61.0 and glaze 9.0.0
-  (`scripts/build-deps.sh`), Qt 6.12.0 desktop + WASM and
+  `~/software`): libpqxx 8.0.2, cpp-httplib 0.61.0, protobuf
+  36.2 (with abseil, built with C++23) and buf 1.74.0 (`scripts/build-deps.sh`),
+  Qt 6.12.0 desktop + WASM with the `qtgrpc` module (Qt Protobuf) and
   emsdk 5.0.5 (`scripts/setup-qt.sh`). The emsdk version is the one the Qt WASM
   kit recommends (`QT_EMCC_RECOMMENDED_VERSION`); upgrade both together.
   Anything managed by `uv` (the Python ≥ 3.10 that Emscripten needs,
   `~/.local/bin/python3.12`) stays in uv's standard location; `EMSDK_PYTHON`
   must point to it, also after sourcing `emsdk_env.sh`, which clears it.
-- System packages: GCC ≥ 13 (C++23), CMake ≥ 3.31 (glaze's install), zlib,
+- System packages: GCC ≥ 13 (C++23), CMake ≥ 3.21, zlib,
   `libpq5-devel`, PostgreSQL.
 - Docker (the user may run it without sudo) for the ephemeral test PostgreSQL;
   the local image is `postgres:18.6`.

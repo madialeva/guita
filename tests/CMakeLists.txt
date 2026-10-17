@@ -3,7 +3,7 @@
 #   ctest --preset native -L unit    only the suites that need no database
 #   ctest --preset native -L db      only the suites that need PostgreSQL
 # The database suites get an ephemeral PostgreSQL (Docker) or GUITA_TEST_DB.
-find_package(Qt6 REQUIRED COMPONENTS Test Network Qml QuickTest)
+find_package(Qt6 REQUIRED COMPONENTS Test QuickTest)
 find_package(libpqxx REQUIRED CONFIG)
 find_package(httplib REQUIRED CONFIG)
 
@@ -43,25 +43,33 @@ target_link_libraries(guita_test_support PUBLIC libpqxx::pqxx)
 # Test harness
 guita_add_test(testdatabase LABELS db DATABASE)
 
+# Contract: the two generators write and read the same bytes
+guita_add_test(contract LABELS unit LIBS contract contract_qt Qt6::Protobuf)
+
 # Backend without database
 guita_add_test(invoiceservice LABELS unit LIBS core)
 guita_add_test(authorizer LABELS unit LIBS api)
+guita_add_test(rpcrouter LABELS unit LIBS api contract)
 
 # Backend with database
 guita_add_test(migrations LABELS db LIBS core DATABASE)
 guita_add_test(invoicestore LABELS db LIBS core DATABASE)
 guita_add_test(database LABELS db LIBS api DATABASE)
 
-# REST API
-guita_add_test(restapi LABELS api LIBS api httplib::httplib DATABASE)
+# RPC API
+guita_add_test(rpcapi LABELS api LIBS api contract httplib::httplib DATABASE)
 
 # Client: its classes are compiled into the suite, since they live in the
 # client executable that backs the QML module
 set(GUITA_CLIENT_DIR ${PROJECT_SOURCE_DIR}/src/client)
 guita_add_test(invoicerepository LABELS client
-    LIBS api Qt6::Network Qt6::Qml
+    LIBS api contract_qt Qt6::Network Qt6::Qml Qt6::Protobuf
     SOURCES ${GUITA_CLIENT_DIR}/ApiConnection.h ${GUITA_CLIENT_DIR}/ApiConnection.cpp
+            ${GUITA_CLIENT_DIR}/ApiTransport.h
+            ${GUITA_CLIENT_DIR}/HttpTransport.h ${GUITA_CLIENT_DIR}/HttpTransport.cpp
+            ${GUITA_CLIENT_DIR}/InProcTransport.h ${GUITA_CLIENT_DIR}/InProcTransport.cpp
             ${GUITA_CLIENT_DIR}/InvoiceRepository.h ${GUITA_CLIENT_DIR}/InvoiceRepository.cpp
+            ${GUITA_CLIENT_DIR}/InvoiceRow.h
     DATABASE)
 
 # QML logic (Qt Quick Test): the tst_*.qml cases in tests/qml

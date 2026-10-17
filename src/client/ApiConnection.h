@@ -1,16 +1,17 @@
 #pragma once
-#include <QByteArray>
-#include <QNetworkAccessManager>
+#include <client/ApiTransport.h>
 #include <QObject>
+#include <QProtobufMessage>
+#include <QProtobufSerializer>
 #include <QQmlEngine>
 #include <QUrl>
+#include <functional>
+#include <memory>
 
-class QJsonDocument;
-class QNetworkReply;
-
-// Connection to the backend REST API, shared by every repository. The client
-// always talks HTTP/JSON and does not know whether the backend is remote or
-// embedded in the process; main() configures it before loading the QML.
+// Connection to the backend, shared by every repository. The client always
+// talks to the backend through the RPC contract and never knows which
+// transport carries the calls (HTTP, or in process in standalone mode);
+// main() configures it before loading the QML.
 class ApiConnection : public QObject {
     Q_OBJECT
     QML_ELEMENT
@@ -23,9 +24,9 @@ public:
     Q_ENUM(Mode)
 
     struct Settings {
-        QUrl baseUrl;
-        QByteArray token;    // Bearer token; empty = no Authorization header
         Mode mode = Connected;
+        QUrl baseUrl;                             // HTTP modes; empty in process
+        std::shared_ptr<ApiTransport> transport;
     };
 
     // Must be called before the QML engine creates the singleton
@@ -35,18 +36,33 @@ public:
     QUrl baseUrl() const { return m_settings.baseUrl; }
     Mode mode() const { return m_settings.mode; }
 
-    QNetworkReply *get(const QString &path);
-    QNetworkReply *post(const QString &path, const QJsonDocument &body);
-
-    // Empty when the reply succeeded; otherwise the backend {"error": ...}
-    // message, or Qt's generic one when the body carries none.
-    static QString errorMessage(QNetworkReply *reply, const QByteArray &body);
+    // Calls a procedure of the contract ("guita.v1.InvoiceService/CreateInvoice"):
+    // encodes the request and later decodes the response into Response for
+    // onResponse, or reports the error to onError; both run in the UI thread
+    // and only while context is alive.
+    template <class Response>
+    void call(const QString &procedure, const QProtobufMessage &request, QObject *context,
+              std::function<void(const Response &)> onResponse,
+              std::function<void(const QString &)> onError) {
+        m_settings.transport->call(procedure, request.serialize(&m_serializer), context,
+            [this, onResponse = std::move(onResponse), onError = std::move(onError)](const ApiTransport::Reply &reply) {
+                if (!reply.ok) {
+                    onError(reply.error);
+                    return;
+                }
+                Response response;
+                if (!response.deserialize(&m_serializer, reply.payload)) {
+                    onError(tr("Unexpected response from the backend"));
+                    return;
+                }
+                onResponse(response);
+            });
+    }
 
 private:
     // Not default-constructible: QML must use create()
     explicit ApiConnection(Settings settings, QObject *parent = nullptr);
-    QNetworkRequest request(const QString &path) const;
 
     Settings m_settings;
-    QNetworkAccessManager m_nam;
+    QProtobufSerializer m_serializer;
 };
