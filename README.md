@@ -81,7 +81,7 @@ lives in the backend. See
 | Python | 3.10+ | Emscripten |
 | libpqxx | 8.0 | server and standalone client |
 | cpp-httplib (header-only, built with zlib) | 0.61 | server and standalone client |
-| protobuf (C++ library and `protoc`) | 36.2 | the contract, both sides |
+| protobuf (C++ library and `protoc`), also built for WebAssembly | 36.2 | the contract, both sides |
 | buf | 1.74 | contract style and compatibility checks |
 | libpq and zlib development files | — | libpqxx, cpp-httplib |
 
@@ -123,8 +123,12 @@ repository scripts do it without root privileges under `$SOFTWARE_DIR`
 
 ```sh
 scripts/setup-qt.sh   # Qt 6.12 desktop + WASM kits (aqtinstall), emsdk 5.0.5, Python 3.12 via uv
-scripts/build-deps.sh # libpqxx, cpp-httplib and protobuf from source, and buf
+scripts/build-deps.sh # libpqxx, cpp-httplib and protobuf (native and WASM) from source, and buf
 ```
+
+Run them in this order: `build-deps.sh` builds protobuf for the web client with
+the emsdk that `setup-qt.sh` installs (without it, that part is skipped with a
+warning).
 
 `setup-qt.sh` needs [uv](https://docs.astral.sh/uv/) to provide the Python
 that Emscripten requires when the system one is older than 3.10. The CMake

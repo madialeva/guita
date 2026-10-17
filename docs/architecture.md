@@ -425,6 +425,7 @@ mode self-contained, without external services.
 | libpqxx | 8.0.2 (requires C++20) | `scripts/build-deps.sh` (static, PIC) |
 | cpp-httplib | 0.61.0 | `scripts/build-deps.sh` (header-only, with zlib) |
 | protobuf (with abseil) | 36.2 | `scripts/build-deps.sh` (static, PIC, C++23; also the host `protoc`) |
+| protobuf (with abseil) for WebAssembly | 36.2 | `scripts/build-deps.sh` with emsdk (static, C++23, no `protoc`) |
 | Qt Protobuf (`qtgrpc` module) | 6.12.0 | `scripts/setup-qt.sh`, in both Qt kits |
 | buf | 1.74.0 | `scripts/build-deps.sh` (binary, checked against its release checksums) |
 | libpq, zlib | system | system development packages |
@@ -442,6 +443,15 @@ mode self-contained, without external services.
   abseil and the project agree on the `std` types abseil aliases. Its `protoc`
   is the host compiler of both generators; the `wasm` preset passes it to Qt
   through `QT_ADDITIONAL_HOST_PACKAGES_PREFIX_PATH`.
+- The same protobuf and abseil are built again for WebAssembly
+  (`~/software/protobuf-36.2-wasm`) with the emsdk of `scripts/setup-qt.sh`,
+  which must therefore run first; without emsdk, `scripts/build-deps.sh` skips
+  that part with a warning. They use what Qt's `wasm_singlethread` kit uses: no
+  threads and Emscripten's default exception handling. Both builds must have
+  the same version, which the generated code checks. The `wasm` preset finds
+  that installation through `CMAKE_PREFIX_PATH` and `CMAKE_FIND_ROOT_PATH`
+  (Emscripten's toolchain only searches its sysroot) and generates the code
+  with the native `protoc` (`GUITA_HOST_PROTOBUF_DIR`).
 - Emscripten needs Python ≥ 3.10 (`EMSDK_PYTHON`, set by the `wasm` preset and
   `scripts/build-wasm.sh`; `emsdk_env.sh` clears it).
 - Presets: `native` (Debug, `build/native`) and `wasm` (Release, `build/wasm`).

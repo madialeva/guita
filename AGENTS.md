@@ -242,7 +242,9 @@ include directory; project code never relies on it.
 - Dependencies that do not come from the system are installed without sudo in
   `~/software` (`SOFTWARE_DIR` in the scripts; the CMake presets assume
   `~/software`): libpqxx 8.0.2, cpp-httplib 0.61.0, protobuf
-  36.2 (with abseil, built with C++23) and buf 1.74.0 (`scripts/build-deps.sh`),
+  36.2 (with abseil, built with C++23; also for WebAssembly in
+  `~/software/protobuf-36.2-wasm`, with the emsdk of `setup-qt.sh`, which runs
+  first) and buf 1.74.0 (`scripts/build-deps.sh`),
   Qt 6.12.0 desktop + WASM with the `qtgrpc` module (Qt Protobuf) and
   emsdk 5.0.5 (`scripts/setup-qt.sh`). The emsdk version is the one the Qt WASM
   kit recommends (`QT_EMCC_RECOMMENDED_VERSION`); upgrade both together.
