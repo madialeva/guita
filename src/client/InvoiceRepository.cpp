@@ -1,17 +1,16 @@
 #include <client/InvoiceRepository.h>
-#include <guita/v1/invoice_service.qpb.h>
+#include <guita/v1/invoice_service.pb.h>
 
-namespace v1 = qtc::guita::v1;
+namespace v1 = guita::v1;
 
 namespace {
 constexpr auto kList = "guita.v1.InvoiceService/ListInvoices";
 constexpr auto kCreate = "guita.v1.InvoiceService/CreateInvoice";
 
+// The contract's strings are UTF-8
 InvoiceRow toRow(const v1::Invoice &invoice) {
-    // customerTaxId() requires the optional field to be present
-    const bool hasTaxId = invoice.hasCustomerTaxId();
-    return {double(invoice.id_proto()), invoice.customer(), hasTaxId,
-            hasTaxId ? invoice.customerTaxId() : QString(), double(invoice.totalCents())};
+    return {double(invoice.id()), QString::fromStdString(invoice.customer()), invoice.has_customer_tax_id(),
+            QString::fromStdString(invoice.customer_tax_id()), double(invoice.total_cents())};
 }
 }
 
@@ -24,10 +23,10 @@ void InvoiceRepository::setConnection(ApiConnection *connection) {
 void InvoiceRepository::create(const QString &customer, const QString &customerTaxId, double totalCents) {
     if (!m_connection) return;
     v1::CreateInvoiceRequest request;
-    request.setCustomer(customer);
+    request.set_customer(customer.toStdString());
     if (!customerTaxId.isEmpty())
-        request.setCustomerTaxId(customerTaxId);
-    request.setTotalCents(qint64(totalCents));
+        request.set_customer_tax_id(customerTaxId.toStdString());
+    request.set_total_cents(qint64(totalCents));
 
     m_connection->call<v1::CreateInvoiceResponse>(kCreate, request, this,
         [this](const v1::CreateInvoiceResponse &response) { emit created(toRow(response.invoice())); },
@@ -39,7 +38,7 @@ void InvoiceRepository::list() {
     m_connection->call<v1::ListInvoicesResponse>(kList, v1::ListInvoicesRequest(), this,
         [this](const v1::ListInvoicesResponse &response) {
             QList<InvoiceRow> rows;
-            rows.reserve(response.invoices().size());
+            rows.reserve(response.invoices_size());
             for (const auto &invoice : response.invoices())
                 rows.append(toRow(invoice));
             emit listed(rows);

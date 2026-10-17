@@ -1,8 +1,7 @@
 #pragma once
 #include <client/ApiTransport.h>
+#include <google/protobuf/message_lite.h>
 #include <QObject>
-#include <QProtobufMessage>
-#include <QProtobufSerializer>
 #include <QQmlEngine>
 #include <QUrl>
 #include <functional>
@@ -41,17 +40,17 @@ public:
     // onResponse, or reports the error to onError; both run in the UI thread
     // and only while context is alive.
     template <class Response>
-    void call(const QString &procedure, const QProtobufMessage &request, QObject *context,
+    void call(const QString &procedure, const google::protobuf::MessageLite &request, QObject *context,
               std::function<void(const Response &)> onResponse,
               std::function<void(const QString &)> onError) {
-        m_settings.transport->call(procedure, request.serialize(&m_serializer), context,
-            [this, onResponse = std::move(onResponse), onError = std::move(onError)](const ApiTransport::Reply &reply) {
+        m_settings.transport->call(procedure, QByteArray::fromStdString(request.SerializeAsString()), context,
+            [onResponse = std::move(onResponse), onError = std::move(onError)](const ApiTransport::Reply &reply) {
                 if (!reply.ok) {
                     onError(reply.error);
                     return;
                 }
                 Response response;
-                if (!response.deserialize(&m_serializer, reply.payload)) {
+                if (!response.ParseFromArray(reply.payload.constData(), int(reply.payload.size()))) {
                     onError(tr("Unexpected response from the backend"));
                     return;
                 }
@@ -64,5 +63,4 @@ private:
     explicit ApiConnection(Settings settings, QObject *parent = nullptr);
 
     Settings m_settings;
-    QProtobufSerializer m_serializer;
 };

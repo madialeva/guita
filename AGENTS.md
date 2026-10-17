@@ -73,10 +73,13 @@ QTP0004). Executables are written to `build/<preset>/bin`.
 ## Contract
 
 - `src/proto/` is the single definition of the client-backend API: messages
-  and services in Protobuf (package `guita.v1`), generated with `protoc` for
-  the backend (`contract`, `guita::v1`, never Qt) and with Qt Protobuf for the
-  client (`contract_qt`, `qtc::guita::v1`, native and WASM). Neither side
-  defines API message shapes by hand.
+  and services in Protobuf (package `guita.v1`), generated once with `protoc`
+  (`contract`, `guita::v1`, never Qt) for the backend and the client, native
+  and WASM, for the lite runtime (`optimize_for = LITE_RUNTIME`,
+  `libprotobuf-lite`). Neither side defines API message shapes by hand, and
+  there is no second generator (Qt Protobuf was dropped). Lite has no
+  descriptors, reflection or JSON: never add code that needs them (debug the
+  API with `buf curl` and `protoc --encode`/`--decode`).
 - Evolution rules: never reuse or renumber a field; reserve the numbers and
   names of removed fields; add instead of changing types or meanings; one
   request and one response message per method (`<Method>Request`,
@@ -88,8 +91,9 @@ QTP0004). Executables are written to `build/<preset>/bin`.
   `origin/develop/vX.Y.Z`), which must pass; the CI will run it on every PR.
   `WIRE_JSON` protects deployed clients and servers of other versions in binary
   and JSON; `FILE` is not used because it forbids even reserved removals.
-- `int64` fields are not accessible from QML (Qt Protobuf makes them
-  non-scriptable): the client's repositories adapt messages for the views.
+- QML never sees the contract's messages: the client's repositories adapt
+  them to value types for the views (`QString` for its UTF-8 strings, `double`
+  for `int64`, since QML's `int` has 32 bits).
 
 ## Backend
 
@@ -103,19 +107,21 @@ QTP0004). Executables are written to `build/<preset>/bin`.
 - `pqxx::connection` is not thread-safe and the HTTP server handles requests
   concurrently: connections come from the `Database` pool, one per transaction.
 - Money is never floating point: amounts are integer cents (`Cents`,
-  `std::int64_t`) in C++ and in the JSON API (`totalCents`), and
+  `std::int64_t`) in C++ and in the API (`total_cents`), and
   `numeric(12,2)` in PostgreSQL; stores convert in SQL. The client parses typed
   amounts as text (`Amount.js`) and keeps cents in a `double` (QML `int` is
   32-bit).
 - Optimistic locking is explicit: updates check and increment `version`
   (`WHERE id = $1 AND version = $2`) and treat zero affected rows as a conflict.
 - Procedures are registered per service on `RpcRouter`
-  (`addInvoiceProcedures()`) with `add<Request, Response>()`, which checks them
-  against the contract at startup. Handlers receive decoded messages, convert
-  them to and from `core`'s structs and throw `std::invalid_argument` for
-  validation errors; the router turns exceptions into Connect codes. Neither
-  handlers nor `core` know the transport: HTTP statuses exist only in
-  `HttpRpcTransport`.
+  (`addInvoiceProcedures()`) with `add<Request, Response>()`, which checks at
+  startup that the types are the method's (`<Method>Request`,
+  `<Method>Response` in the service's package). The API is binary Protobuf
+  only; Connect errors are JSON, written by `connectErrorBody()`. Handlers
+  receive decoded messages, convert them to and from `core`'s structs and
+  throw `std::invalid_argument` for validation errors; the router turns
+  exceptions into Connect codes. Neither handlers nor `core` know the
+  transport: HTTP statuses exist only in `HttpRpcTransport`.
 - `backend/api/Backend.h` must not include cpp-httplib, libpqxx or protobuf
   (pimpl): the client only needs that interface to embed the backend.
 - Authentication is a shared Bearer token for now (random per launch in
@@ -131,7 +137,7 @@ context properties, `qmlRegister*` calls or objects injected from `main.cpp`:
 - Per-view objects (repositories, controllers) use `QML_ELEMENT` and are
   instantiated by the view that owns them (`Main.qml` creates `InvoiceRepository`).
   Repositories call procedures through `ApiConnection::call<Response>()` with
-  the contract's Qt Protobuf messages and hand the views typed value types
+  the contract's messages and hand the views typed value types
   (`InvoiceRow`, `QML_VALUE_TYPE`), never `QVariantMap`.
 - `ApiConnection` delegates to an `ApiTransport`: `HttpTransport`
   (`QNetworkAccessManager`, binary Connect RPC) or `InProcTransport` (native
@@ -242,8 +248,10 @@ include directory; project code never relies on it.
 - Dependencies that do not come from the system are installed without sudo in
   `~/software` (`SOFTWARE_DIR` in the scripts; the CMake presets assume
   `~/software`): libpqxx 8.0.2, cpp-httplib 0.61.0, protobuf
-  36.2 (with abseil, built with C++23) and buf 1.74.0 (`scripts/build-deps.sh`),
-  Qt 6.12.0 desktop + WASM with the `qtgrpc` module (Qt Protobuf) and
+  36.2 (with abseil, built with C++23; also for WebAssembly in
+  `~/software/protobuf-36.2-wasm`, with the emsdk of `setup-qt.sh`, which runs
+  first) and buf 1.74.0 (`scripts/build-deps.sh`),
+  Qt 6.12.0 desktop + WASM and
   emsdk 5.0.5 (`scripts/setup-qt.sh`). The emsdk version is the one the Qt WASM
   kit recommends (`QT_EMCC_RECOMMENDED_VERSION`); upgrade both together.
   Anything managed by `uv` (the Python ≥ 3.10 that Emscripten needs,

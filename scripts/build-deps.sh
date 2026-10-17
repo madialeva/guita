@@ -2,7 +2,9 @@
 # Builds and installs the backend libraries and tools in the user's directory (no sudo):
 #   - libpqxx       C++ client for PostgreSQL (static, PIC: linked into the client too)
 #   - cpp-httplib   embedded HTTP server (header-only), with zlib compression
-#   - protobuf      C++ library and protoc for the contract (static, PIC, with abseil)
+#   - protobuf      C++ library and protoc for the contract (static, PIC, with abseil),
+#                   and the library again for WebAssembly (the web client), with the
+#                   emsdk that scripts/setup-qt.sh installs: run that script first
 #   - buf           lint and breaking-change checks of the contract (binary)
 #
 # System requirements: g++ with C++23 (GCC 13+), cmake 3.21+, ninja, git, libpq (libpq5-devel /
@@ -10,6 +12,7 @@
 #
 # Variables:
 #   SOFTWARE_DIR         root of the local dependencies  [~/software]
+#   EMSDK_DIR            emsdk for the WebAssembly build [$SOFTWARE_DIR/emsdk]
 #   LIBPQXX_VERSION      libpqxx tag                     [8.0.2]
 #   HTTPLIB_VERSION      cpp-httplib tag (without "v")   [0.61.0]
 #   PROTOBUF_VERSION     protobuf tag (without "v")      [36.2]
@@ -64,6 +67,35 @@ build "protobuf-$PROTOBUF_VERSION" "$SOFTWARE_DIR/protobuf-$PROTOBUF_VERSION" \
     -DCMAKE_CXX_STANDARD=23 -DBUILD_SHARED_LIBS=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
     -Dprotobuf_BUILD_TESTS=OFF -Dprotobuf_BUILD_LIBUPB=OFF -Dprotobuf_INSTALL=ON \
     -Dprotobuf_ABSL_PROVIDER=module -DABSL_ENABLE_INSTALL=ON -DABSL_PROPAGATE_CXX_STD=ON
+
+# The same protobuf and abseil for the web client, for Qt's wasm_singlethread
+# kit: no threads and Emscripten's default exception handling, as the kit. The
+# same version as the native one, which the generated code requires; without
+# protoc (the native one generates the code of the WebAssembly build)
+EMSDK_DIR="${EMSDK_DIR:-$SOFTWARE_DIR/emsdk}"
+protobuf_wasm="$SOFTWARE_DIR/protobuf-$PROTOBUF_VERSION-wasm"
+if [[ -f "$EMSDK_DIR/emsdk_env.sh" ]]; then
+    (
+        # Emscripten needs Python >= 3.10; emsdk_env.sh clears EMSDK_PYTHON
+        export EMSDK_PYTHON="$HOME/.local/bin/python3.12"
+        # shellcheck disable=SC1091
+        source "$EMSDK_DIR/emsdk_env.sh" >/dev/null 2>&1
+        export EMSDK_PYTHON="$HOME/.local/bin/python3.12"
+        src="$SRC/protobuf-$PROTOBUF_VERSION"
+        emcmake cmake -S "$src" -B "$src/build-wasm" -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$protobuf_wasm" \
+            -DCMAKE_CXX_STANDARD=23 -DBUILD_SHARED_LIBS=OFF \
+            -Dprotobuf_BUILD_TESTS=OFF -Dprotobuf_BUILD_PROTOC_BINARIES=OFF -Dprotobuf_BUILD_LIBUPB=OFF \
+            -Dprotobuf_INSTALL=ON -Dprotobuf_ABSL_PROVIDER=module -DABSL_ENABLE_INSTALL=ON \
+            -DABSL_PROPAGATE_CXX_STD=ON
+        cmake --build "$src/build-wasm" -j"$(nproc)"
+        cmake --install "$src/build-wasm"
+    )
+    echo ">> protobuf-$PROTOBUF_VERSION for WebAssembly installed in $protobuf_wasm"
+else
+    echo ">> warning: no emsdk in $EMSDK_DIR, protobuf for WebAssembly skipped (needed by the web" \
+         "client): run scripts/setup-qt.sh and then this script again" >&2
+fi
 
 # buf: a single binary, checked against the release checksums
 buf_dir="$SOFTWARE_DIR/buf-$BUF_VERSION"

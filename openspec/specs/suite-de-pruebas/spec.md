@@ -50,20 +50,26 @@ Cada prueba SHALL pertenecer a una categoría según lo que necesita (sin base d
 - **WHEN** el desarrollador ejecuta solo la categoría de pruebas sin base de datos
 - **THEN** se ejecutan únicamente esas pruebas, sin necesitar Docker ni `GUITA_TEST_DB`
 
-### Requirement: Cobertura del comportamiento actual
-La batería SHALL verificar el comportamiento que hoy ofrece el proyecto: las validaciones de negocio, la persistencia exacta de importes, las migraciones, el contrato RPC del API en sus dos codificaciones, la interoperabilidad entre el código generado para el backend y para el cliente, la autorización por token, el acceso del cliente al API por sus dos transportes (HTTP y en proceso) y el análisis y formato de importes en la interfaz.
+### Requirement: Cobertura de las pruebas
+La batería SHALL verificar el comportamiento que hoy ofrece el proyecto:
+- las validaciones de negocio y la persistencia exacta de importes;
+- las migraciones;
+- el contrato RPC del API en su codificación binaria, con bytes de referencia del contrato;
+- la autorización por token;
+- el acceso del cliente al API por sus dos transportes (HTTP y en proceso);
+- el análisis y formato de importes en la interfaz.
 
 #### Scenario: Importes exactos
 - **WHEN** se guardan y leen facturas con importes de 0,05, 1234,50 y el máximo admitido (9 999 999 999,99)
 - **THEN** los importes leídos coinciden exactamente en céntimos con los guardados
 
 #### Scenario: Contrato del API
-- **WHEN** se llama a los procedimientos del API en binario y en JSON con peticiones válidas, sin token, con mensajes mal formados, con un tipo de contenido no admitido, con un método HTTP distinto de POST o a un procedimiento inexistente
+- **WHEN** se llama a los procedimientos del API con peticiones válidas, sin token, con mensajes mal formados, con un cuerpo JSON u otro tipo de contenido no admitido, con un método HTTP distinto de POST o a un procedimiento inexistente
 - **THEN** las respuestas tienen los estados y los errores documentados (200, 401, 400, 415, 405, 404) con sus códigos de error
 
-#### Scenario: Interoperabilidad de los generadores
-- **WHEN** se codifica un mensaje del contrato con el código generado para un lado y se decodifica con el del otro
-- **THEN** el contenido coincide, incluidos los campos opcionales ausentes y los enteros de 64 bits en sus límites
+#### Scenario: Bytes de referencia del contrato
+- **WHEN** se codifican mensajes fijos del contrato, con campos opcionales ausentes y presentes y enteros de 64 bits en sus límites, y se decodifican los bytes de referencia, en nativo y en WebAssembly
+- **THEN** los bytes coinciden con los de referencia guardados en las pruebas y el contenido decodificado con el original
 
 #### Scenario: Transportes del cliente
 - **WHEN** el cliente crea y lista facturas y recibe un error de validación por HTTP y en proceso

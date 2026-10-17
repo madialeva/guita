@@ -81,12 +81,12 @@ lives in the backend. See
 | Python | 3.10+ | Emscripten |
 | libpqxx | 8.0 | server and standalone client |
 | cpp-httplib (header-only, built with zlib) | 0.61 | server and standalone client |
-| protobuf (C++ library and `protoc`) | 36.2 | the contract, both sides |
+| protobuf (C++ library and `protoc`), also built for WebAssembly | 36.2 | the contract, both sides |
 | buf | 1.74 | contract style and compatibility checks |
 | libpq and zlib development files | — | libpqxx, cpp-httplib |
 
 Both Qt kits need Qt Quick, Qt Quick Controls, Qt Network, the Linguist tools
-and the `qttasktree` and `qtgrpc` (Qt Protobuf) modules.
+and the `qttasktree` module.
 
 ### To run
 
@@ -123,8 +123,12 @@ repository scripts do it without root privileges under `$SOFTWARE_DIR`
 
 ```sh
 scripts/setup-qt.sh   # Qt 6.12 desktop + WASM kits (aqtinstall), emsdk 5.0.5, Python 3.12 via uv
-scripts/build-deps.sh # libpqxx, cpp-httplib and protobuf from source, and buf
+scripts/build-deps.sh # libpqxx, cpp-httplib and protobuf (native and WASM) from source, and buf
 ```
+
+Run them in this order: `build-deps.sh` builds protobuf for the web client with
+the emsdk that `setup-qt.sh` installs (without it, that part is skipped with a
+warning).
 
 `setup-qt.sh` needs [uv](https://docs.astral.sh/uv/) to provide the Python
 that Emscripten requires when the system one is older than 3.10. The CMake
@@ -169,6 +173,12 @@ build/native/bin/client
 # Desktop client in standalone mode: no server needed
 build/native/bin/client --standalone
 ```
+
+The API speaks binary Protobuf. To call it by hand, `buf curl --schema
+src/proto --data '{}' http://127.0.0.1:8090/api/guita.v1.InvoiceService/ListInvoices`
+takes the request in JSON and prints the response in JSON, and `protoc
+--encode`/`--decode` convert between Protobuf's text format and binary (see
+[docs/architecture.md](docs/architecture.md), §4.3).
 
 The server reads `DB_CONN`, `HTTP_ADDRESS`, `HTTP_PORT`, `DOCROOT` and
 `API_TOKEN` from the environment. Until user authentication exists, `API_TOKEN`

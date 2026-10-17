@@ -3,10 +3,9 @@
 #include <QQmlEngine>
 #include <QString>
 
-// An invoice as the views see it. Qt Protobuf's int64 fields are not
-// accessible from QML, so the id and the total travel as doubles, which hold
-// whole numbers exactly up to 2^53 (totals never exceed 10^12 cents, and ids
-// grow one by one).
+// An invoice as the views see it. QML's int has 32 bits, so the id and the
+// total travel as doubles, which hold whole numbers exactly up to 2^53 (totals
+// never exceed 10^12 cents, and ids grow one by one).
 struct InvoiceRow {
     Q_GADGET
     QML_VALUE_TYPE(invoiceRow)

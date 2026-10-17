@@ -1,20 +1,23 @@
 #include <backend/api/Backend.h>
+#include <backend/api/HttpRpcTransport.h>
 #include <guita/v1/invoice_service.pb.h>
 #include <support/Sockets.h>
 #include <support/TestDatabase.h>
 #include <httplib.h>
 #include <pqxx/pqxx>
-#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QtTest>
+#include <cstdint>
 #include <memory>
+#include <optional>
+#include <string>
 
 namespace v1 = guita::v1;
 
-// The RPC API over HTTP against a real Backend on a free port: both codecs and
-// the Connect errors. Binary responses are decoded with protoc's code, JSON
-// ones with Qt, independently of the backend's encoders.
+// The RPC API over HTTP against a real Backend on a free port: binary
+// Protobuf only, and the Connect errors, which are JSON and read with Qt,
+// independently of the backend's encoder.
 class RpcApiTest : public QObject {
     Q_OBJECT
 
@@ -64,37 +67,36 @@ private slots:
         QCOMPARE(listed.invoices(0).id(), created.invoice().id());
     }
 
-    void createsInJson() {
-        // Canonical proto3 JSON, as written by hand: int64 as a number or a string,
-        // unknown fields ignored
-        const auto res = post(kCreate, "application/json",
-                              R"({"customer":"Json Ltd","totalCents":"4200","currency":"EUR"})");
+    void skipsUnknownFields() {
+        // Field 15 (varint 1), of a later version of the contract
+        const auto res = post(kCreate, "application/proto", create("Later client", 4200) + std::string("\x78\x01", 2));
         QVERIFY(res);
         QCOMPARE(res->status, 200);
-        QCOMPARE(res->get_header_value("Content-Type"), std::string("application/json"));
-        const auto invoice = json(res).object().value("invoice").toObject();
-        QCOMPARE(invoice.value("customer").toString(), QStringLiteral("Json Ltd"));
-        QCOMPARE(invoice.value("totalCents").toString(), QStringLiteral("4200"));
-        QVERIFY(!invoice.contains("customerTaxId"));
+        v1::CreateInvoiceResponse created;
+        QVERIFY(created.ParseFromString(res->body));
+        QCOMPARE(created.invoice().customer(), std::string("Later client"));
+        QCOMPARE(created.invoice().total_cents(), 4200);
+        QVERIFY(!created.invoice().has_customer_tax_id());
     }
 
     void storesAnEmptyTaxIdAsAbsent() {
-        const auto res = post(kCreate, "application/json", R"({"customer":"No tax ID","customerTaxId":"","totalCents":5})");
+        const auto res = post(kCreate, "application/proto", create("No tax ID", 5, ""));
         QVERIFY(res);
         QCOMPARE(res->status, 200);
-        const auto invoice = json(res).object().value("invoice").toObject();
-        QVERIFY(!invoice.contains("customerTaxId"));
+        v1::CreateInvoiceResponse created;
+        QVERIFY(created.ParseFromString(res->body));
+        QVERIFY(!created.invoice().has_customer_tax_id());
 
         pqxx::connection connection(m_db->connectionString());
         pqxx::nontransaction tx(connection);
         QVERIFY(tx.query_value<bool>("SELECT customer_tax_id IS NULL FROM invoices WHERE id = $1",
-                                     pqxx::params{invoice.value("id").toString().toLongLong()}));
+                                     pqxx::params{created.invoice().id()}));
     }
 
     void acceptsTheConnectProtocolHeader() {
         httplib::Headers headers{{"Authorization", std::string("Bearer ") + kToken},
                                  {"Connect-Protocol-Version", "1"}};
-        const auto res = m_client->Post(std::string("/api/") + kList, headers, "{}", "application/json");
+        const auto res = m_client->Post(std::string("/api/") + kList, headers, std::string(), "application/proto");
         QVERIFY(res);
         QCOMPARE(res->status, 200);
     }
@@ -107,13 +109,15 @@ private slots:
         QTest::addColumn<int>("status");
         QTest::addColumn<QString>("code");
 
-        QTest::newRow("no token") << kList << "application/json" << QByteArray("{}") << false << 401 << "unauthenticated";
-        QTest::newRow("validation") << kCreate << "application/json" << QByteArray(R"({"totalCents":1})") << true << 400 << "invalid_argument";
-        QTest::newRow("negative total") << kCreate << "application/json" << QByteArray(R"({"customer":"A","totalCents":-1})") << true << 400 << "invalid_argument";
-        QTest::newRow("malformed json") << kCreate << "application/json" << QByteArray("{x") << true << 400 << "invalid_argument";
-        QTest::newRow("malformed binary") << kCreate << "application/proto" << QByteArray("\xff\xff\xff\xff") << true << 400 << "invalid_argument";
+        const auto proto = QStringLiteral("application/proto");
+        const auto bytes = [](const std::string &s) { return QByteArray::fromStdString(s); };
+        QTest::newRow("no token") << kList << proto << QByteArray() << false << 401 << "unauthenticated";
+        QTest::newRow("validation") << kCreate << proto << bytes(create("", 1)) << true << 400 << "invalid_argument";
+        QTest::newRow("negative total") << kCreate << proto << bytes(create("A", -1)) << true << 400 << "invalid_argument";
+        QTest::newRow("malformed") << kCreate << proto << QByteArray("\xff\xff\xff\xff") << true << 400 << "invalid_argument";
+        QTest::newRow("json") << kCreate << "application/json" << QByteArray(R"({"customer":"A","totalCents":"1"})") << true << 415 << "unimplemented";
         QTest::newRow("other content type") << kCreate << "application/x-www-form-urlencoded" << QByteArray("customer=A") << true << 415 << "unimplemented";
-        QTest::newRow("unknown procedure") << "guita.v1.InvoiceService/DeleteInvoice" << "application/json" << QByteArray("{}") << true << 404 << "unimplemented";
+        QTest::newRow("unknown procedure") << "guita.v1.InvoiceService/DeleteInvoice" << proto << QByteArray() << true << 404 << "unimplemented";
     }
 
     void reportsErrors() {
@@ -135,9 +139,30 @@ private slots:
     }
 
     void reportsTheValidationMessage() {
-        const auto res = post(kCreate, "application/json", R"({"totalCents":1})");
+        const auto res = post(kCreate, "application/proto", create("", 1));
         QVERIFY(res);
         QCOMPARE(json(res).object().value("message").toString(), QStringLiteral("Customer is required"));
+    }
+
+    void writesErrorBodiesAsJson_data() {
+        QTest::addColumn<QString>("message");
+        QTest::newRow("plain") << "Customer is required";
+        QTest::newRow("quotes and backslashes") << R"(A "quoted" \ path)";
+        QTest::newRow("control characters") << "line\nbreak\ttab\x01";
+        QTest::newRow("not ASCII") << "Factura de José · 12 €";
+    }
+    void writesErrorBodiesAsJson() {
+        QFETCH(QString, message);
+        QJsonParseError error;
+        const auto body = QByteArray::fromStdString(connectErrorBody(RpcCode::InvalidArgument, message.toStdString()));
+        const auto document = QJsonDocument::fromJson(body, &error);
+        QCOMPARE(error.error, QJsonParseError::NoError);
+        QCOMPARE(document.object().value("code").toString(), QStringLiteral("invalid_argument"));
+        QCOMPARE(document.object().value("message").toString(), message);
+
+        // Without a message, only the code
+        const auto bare = QJsonDocument::fromJson(QByteArray::fromStdString(connectErrorBody(RpcCode::Internal, {})));
+        QCOMPARE(bare.object().keys(), QStringList{"code"});
     }
 
     void acceptsOnlyPost() {
@@ -168,7 +193,7 @@ private slots:
         QCOMPARE(inProcess.port(), 0);
         QCOMPARE(listeningTcpSockets(), listening);
 
-        const auto result = inProcess.call({kList, RpcCodec::Binary, {}, {}});
+        const auto result = inProcess.call({kList, {}, {}});
         QCOMPARE(result.code, RpcCode::Ok);
         v1::ListInvoicesResponse listed;
         QVERIFY(listed.ParseFromString(result.payload));
@@ -190,6 +215,16 @@ private:
 
     httplib::Result post(const char *procedure, const char *contentType, const std::string &body) {
         return m_client->Post(std::string("/api/") + procedure, auth(), body, contentType);
+    }
+
+    // A CreateInvoiceRequest; taxId absent unless given
+    static std::string create(const std::string &customer, std::int64_t totalCents,
+                              std::optional<std::string> taxId = std::nullopt) {
+        v1::CreateInvoiceRequest request;
+        request.set_customer(customer);
+        if (taxId) request.set_customer_tax_id(*taxId);
+        request.set_total_cents(totalCents);
+        return request.SerializeAsString();
     }
 
     static QJsonDocument json(const httplib::Result &res) {

@@ -3,18 +3,14 @@
 #include <string_view>
 
 // A call to a procedure of the contract, independent of the transport that
-// carried it (HTTP, in process, ...). Only standard types: the client sees
-// this header through Backend.h.
-
-// Encoding of the payloads: binary Protobuf or the canonical proto3 JSON
-enum class RpcCodec { Binary, Json };
+// carried it (HTTP, in process, ...). Payloads are binary Protobuf. Only
+// standard types: the client sees this header through Backend.h.
 
 // Result of a call: Ok or one of the Connect error codes the backend uses
 enum class RpcCode { Ok, InvalidArgument, Unauthenticated, Unimplemented, Internal };
 
 struct RpcCall {
     std::string procedure;        // "guita.v1.InvoiceService/CreateInvoice"
-    RpcCodec codec = RpcCodec::Binary;
     std::string payload;          // the encoded request message
     std::string authorization;    // as in an Authorization header; empty in process
 };

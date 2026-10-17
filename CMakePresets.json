@@ -24,7 +24,9 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "QT_HOST_PATH": "$env{HOME}/software/Qt/6.12.0/gcc_64",
-        "QT_ADDITIONAL_HOST_PACKAGES_PREFIX_PATH": "$env{HOME}/software/protobuf-36.2"
+        "CMAKE_PREFIX_PATH": "$env{HOME}/software/protobuf-36.2-wasm",
+        "CMAKE_FIND_ROOT_PATH": "$env{HOME}/software/protobuf-36.2-wasm",
+        "GUITA_HOST_PROTOBUF_DIR": "$env{HOME}/software/protobuf-36.2"
       }
     },
     {

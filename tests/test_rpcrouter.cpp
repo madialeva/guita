@@ -1,8 +1,5 @@
 #include <backend/api/RpcRouter.h>
 #include <guita/v1/invoice_service.pb.h>
-#include <QJsonArray>
-#include <QJsonDocument>
-#include <QJsonObject>
 #include <QtTest>
 #include <atomic>
 #include <stdexcept>
@@ -11,8 +8,8 @@
 
 namespace v1 = guita::v1;
 
-// RpcRouter without any transport: dispatch, codecs, authorization and error
-// codes. Stub handlers on the contract's methods, no database.
+// RpcRouter without any transport: dispatch, binary messages, authorization,
+// error codes and the contract check at registration. Stub handlers on the contract's methods, no database.
 class RpcRouterTest : public QObject {
     Q_OBJECT
 
@@ -43,38 +40,32 @@ private slots:
             });
     }
 
-    void callsWithTheBinaryCodec() {
+    void callsAProcedure() {
         v1::CreateInvoiceRequest request;
         request.set_customer("Acme");
         request.set_total_cents(121000);
 
-        const auto result = call(kCreate, RpcCodec::Binary, request.SerializeAsString());
+        const auto result = call(kCreate, request.SerializeAsString());
         QCOMPARE(result.code, RpcCode::Ok);
         v1::CreateInvoiceResponse response;
         QVERIFY(response.ParseFromString(result.payload));
         QCOMPARE(response.invoice().id(), 8);
         QCOMPARE(response.invoice().customer(), std::string("Acme"));
+        QVERIFY(!response.invoice().has_customer_tax_id());
         QCOMPARE(response.invoice().total_cents(), 121000);
     }
 
-    void callsWithTheJsonCodec() {
-        const auto result = call(kCreate, RpcCodec::Json,
-                                 R"({"customer":"Acme","totalCents":"121000","futureField":true})");
-        QCOMPARE(result.code, RpcCode::Ok);
+    void skipsUnknownFields() {
+        // Field 15 (varint 1) and field 16 (string "x"), of a later version
+        v1::CreateInvoiceRequest request;
+        request.set_customer("Acme");
+        const auto payload = request.SerializeAsString() + std::string("\x78\x01\x82\x01\x01x", 6);
 
-        const auto invoice = json(result).object().value("invoice").toObject();
-        QCOMPARE(invoice.value("customer").toString(), QStringLiteral("Acme"));
-        // Canonical proto3 JSON: int64 as strings, absent optionals omitted
-        QCOMPARE(invoice.value("id").toString(), QStringLiteral("8"));
-        QCOMPARE(invoice.value("totalCents").toString(), QStringLiteral("121000"));
-        QVERIFY(!invoice.contains("customerTaxId"));
-    }
-
-    void printsZerosInJson() {
-        const auto result = call(kList, RpcCodec::Json, "{}");
+        const auto result = call(kCreate, payload);
         QCOMPARE(result.code, RpcCode::Ok);
-        const auto invoice = json(result).object().value("invoices").toArray().first().toObject();
-        QCOMPARE(invoice.value("totalCents").toString(), QStringLiteral("0"));
+        v1::CreateInvoiceResponse response;
+        QVERIFY(response.ParseFromString(result.payload));
+        QCOMPARE(response.invoice().customer(), std::string("Acme"));
     }
 
     void rejectsCallsWithoutAuthorization_data() {
@@ -85,39 +76,39 @@ private slots:
 
     void rejectsCallsWithoutAuthorization() {
         QFETCH(QString, authorization);
-        const auto result = m_router->call({kList, RpcCodec::Binary, {}, authorization.toStdString()});
+        const auto result = m_router->call({kList, {}, authorization.toStdString()});
         QCOMPARE(result.code, RpcCode::Unauthenticated);
         QCOMPARE(m_executed.load(), 0);
     }
 
     void reportsUnknownProcedures() {
-        QCOMPARE(call("guita.v1.InvoiceService/DeleteInvoice", RpcCodec::Binary, {}).code, RpcCode::Unimplemented);
-        QCOMPARE(call("nonsense", RpcCodec::Json, "{}").code, RpcCode::Unimplemented);
+        QCOMPARE(call("guita.v1.InvoiceService/DeleteInvoice", {}).code, RpcCode::Unimplemented);
+        QCOMPARE(call("nonsense", {}).code, RpcCode::Unimplemented);
     }
 
     void rejectsMalformedMessages_data() {
-        QTest::addColumn<int>("codec");
         QTest::addColumn<QByteArray>("payload");
-        QTest::newRow("binary") << int(RpcCodec::Binary) << QByteArray("\xff\xff\xff\xff");
-        QTest::newRow("json syntax") << int(RpcCodec::Json) << QByteArray("{x");
-        QTest::newRow("json fractional int64") << int(RpcCodec::Json) << QByteArray(R"({"totalCents":12.5})");
-        QTest::newRow("json wrong type") << int(RpcCodec::Json) << QByteArray(R"({"customer":5})");
+        QTest::newRow("unterminated varints") << QByteArray("\xff\xff\xff\xff");
+        QTest::newRow("truncated string") << QByteArray("\x0a\x05" "ab");
+        QTest::newRow("invalid wire type") << QByteArray("\x0f");
     }
 
     void rejectsMalformedMessages() {
-        QFETCH(int, codec);
         QFETCH(QByteArray, payload);
-        const auto result = call(kCreate, RpcCodec(codec), payload.toStdString());
+        const auto result = call(kCreate, payload.toStdString());
         QCOMPARE(result.code, RpcCode::InvalidArgument);
+        QCOMPARE(result.message, std::string("Malformed guita.v1.CreateInvoiceRequest"));
         QCOMPARE(m_executed.load(), 0);
     }
 
     void translatesHandlerExceptions() {
-        auto result = call(kCreate, RpcCodec::Json, R"({"customer":""})");
+        auto result = call(kCreate, v1::CreateInvoiceRequest().SerializeAsString());
         QCOMPARE(result.code, RpcCode::InvalidArgument);
         QCOMPARE(result.message, std::string("Customer is required"));
 
-        result = call(kCreate, RpcCodec::Json, R"({"customer":"boom"})");
+        v1::CreateInvoiceRequest boom;
+        boom.set_customer("boom");
+        result = call(kCreate, boom.SerializeAsString());
         QCOMPARE(result.code, RpcCode::Internal);
         QCOMPARE(result.message, std::string("Internal error"));   // details stay in the log
     }
@@ -129,6 +120,13 @@ private slots:
             (router.add<v1::ListInvoicesRequest, v1::ListInvoicesResponse>("guita.v1.InvoiceService/Missing", noop)));
         QVERIFY_THROWS_EXCEPTION(std::logic_error,
             (router.add<v1::ListInvoicesRequest, v1::ListInvoicesResponse>("guita.v1.InvoiceService/CreateInvoice", noop)));
+        // Another package, or no service at all
+        QVERIFY_THROWS_EXCEPTION(std::logic_error,
+            (router.add<v1::ListInvoicesRequest, v1::ListInvoicesResponse>("guita.v2.InvoiceService/ListInvoices", noop)));
+        QVERIFY_THROWS_EXCEPTION(std::logic_error,
+            (router.add<v1::ListInvoicesRequest, v1::ListInvoicesResponse>("ListInvoices", noop)));
+        // The contract's own registration is accepted
+        router.add<v1::ListInvoicesRequest, v1::ListInvoicesResponse>("guita.v1.InvoiceService/ListInvoices", noop);
     }
 
     void isThreadSafe() {
@@ -137,7 +135,7 @@ private slots:
         for (int i = 0; i < 16; ++i) {
             threads.emplace_back([&] {
                 for (int j = 0; j < 100; ++j)
-                    if (call(kList, RpcCodec::Binary, {}).code == RpcCode::Ok) ++ok;
+                    if (call(kList, {}).code == RpcCode::Ok) ++ok;
             });
         }
         for (auto &thread : threads)
@@ -149,12 +147,8 @@ private:
     static constexpr const char *kList = "guita.v1.InvoiceService/ListInvoices";
     static constexpr const char *kCreate = "guita.v1.InvoiceService/CreateInvoice";
 
-    RpcResult call(const std::string &procedure, RpcCodec codec, const std::string &payload) {
-        return m_router->call({procedure, codec, payload, "Bearer secret"});
-    }
-
-    static QJsonDocument json(const RpcResult &result) {
-        return QJsonDocument::fromJson(QByteArray::fromStdString(result.payload));
+    RpcResult call(const std::string &procedure, const std::string &payload) {
+        return m_router->call({procedure, payload, "Bearer secret"});
     }
 
     std::unique_ptr<RpcRouter> m_router;
