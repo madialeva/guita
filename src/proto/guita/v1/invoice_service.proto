@@ -6,6 +6,10 @@ syntax = "proto3";
 
 package guita.v1;
 
+// The lite runtime on both sides: binary encoding only, without descriptors,
+// reflection or JSON, and a much smaller library in the web client
+option optimize_for = LITE_RUNTIME;
+
 // An invoice of the sample billing domain.
 message Invoice {
   // Identifier assigned by the backend.

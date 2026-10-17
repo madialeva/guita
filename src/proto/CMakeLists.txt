@@ -22,7 +22,7 @@ protobuf_generate(TARGET contract
     PROTOC_OUT_DIR ${CMAKE_CURRENT_BINARY_DIR}/cpp
     ${_protoc})
 target_include_directories(contract PUBLIC ${CMAKE_CURRENT_BINARY_DIR}/cpp)
-target_link_libraries(contract PUBLIC protobuf::libprotobuf)
+target_link_libraries(contract PUBLIC protobuf::libprotobuf-lite)
 
 # Style of the contract (buf lint and buf format); compatibility with the
 # development branch is checked by scripts/check-contract.sh

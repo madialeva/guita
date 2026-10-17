@@ -38,13 +38,13 @@
 
 ## 4. Lite
 
-- [ ] 4.1 Declarar `option optimize_for = LITE_RUNTIME;` en el contrato y enlazar `protobuf::libprotobuf-lite` en lugar de la completa. Verificar:
+- [x] 4.1 Declarar `option optimize_for = LITE_RUNTIME;` en el contrato y enlazar `protobuf::libprotobuf-lite` en lugar de la completa. Verificar:
   - que `buf lint` y `buf format` pasan;
   - que `scripts/check-contract.sh` no detecta cambios incompatibles;
   - que ningún objetivo enlaza `protobuf::libprotobuf`;
   - que `ctest --preset native -j8` pasa;
   - que el preset `wasm` compila.
-- [ ] 4.2 Documentar la variante lite y lo que deja fuera (JSON, reflexión) en `docs/architecture.md` §3 y AGENTS.md. Verificar que las órdenes documentadas funcionan tal cual.
+- [x] 4.2 Documentar la variante lite y lo que deja fuera (JSON, reflexión) en `docs/architecture.md` §3 y AGENTS.md. Verificar que las órdenes documentadas funcionan tal cual.
 
 ## 5. Medición
 

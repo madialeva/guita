@@ -75,8 +75,11 @@ QTP0004). Executables are written to `build/<preset>/bin`.
 - `src/proto/` is the single definition of the client-backend API: messages
   and services in Protobuf (package `guita.v1`), generated once with `protoc`
   (`contract`, `guita::v1`, never Qt) for the backend and the client, native
-  and WASM. Neither side defines API message shapes by hand, and there is no
-  second generator (Qt Protobuf was dropped).
+  and WASM, for the lite runtime (`optimize_for = LITE_RUNTIME`,
+  `libprotobuf-lite`). Neither side defines API message shapes by hand, and
+  there is no second generator (Qt Protobuf was dropped). Lite has no
+  descriptors, reflection or JSON: never add code that needs them (debug the
+  API with `buf curl` and `protoc --encode`/`--decode`).
 - Evolution rules: never reuse or renumber a field; reserve the numbers and
   names of removed fields; add instead of changing types or meanings; one
   request and one response message per method (`<Method>Request`,
