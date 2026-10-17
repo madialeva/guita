@@ -54,7 +54,7 @@
 
 ## 6. Integración
 
-- [ ] 6.1 Ejecutar la batería completa (`ctest --preset native -j8`) y, contra `scripts/run-server.sh`:
+- [x] 6.1 Ejecutar la batería completa (`ctest --preset native -j8`) y, contra `scripts/run-server.sh`:
   - listar facturas con `buf curl`;
   - crear una con `protoc --encode` y `curl`, leyendo la respuesta con `protoc --decode`;
   - comprobar que una petición `application/json` da 415.
