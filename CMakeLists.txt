@@ -20,6 +20,9 @@ qt_standard_project_setup(REQUIRES 6.12
 # BUILD_TESTING (ON by default) controls the test suite in tests/
 include(CTest)
 
+# The client-backend contract (Protobuf), generated for both sides
+add_subdirectory(src/proto)
+
 # The backend is native only: never built for WASM
 if(NOT EMSCRIPTEN)
     add_subdirectory(src/backend)

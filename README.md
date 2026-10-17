@@ -79,10 +79,12 @@ remote or embedded; all business logic lives in the backend. See
 | libpqxx | 8.0 | server and standalone client |
 | cpp-httplib (header-only, built with zlib) | 0.61 | server and standalone client |
 | glaze (header-only) | 9.0 | server and standalone client |
+| protobuf (C++ library and `protoc`) | 36.2 | the contract, both sides |
+| buf | 1.74 | contract style and compatibility checks |
 | libpq and zlib development files | — | libpqxx, cpp-httplib |
 
 Both Qt kits need Qt Quick, Qt Quick Controls, Qt Network, the Linguist tools
-and the `qttasktree` module.
+and the `qttasktree` and `qtgrpc` (Qt Protobuf) modules.
 
 ### To run
 
@@ -119,7 +121,7 @@ repository scripts do it without root privileges under `$SOFTWARE_DIR`
 
 ```sh
 scripts/setup-qt.sh   # Qt 6.12 desktop + WASM kits (aqtinstall), emsdk 5.0.5, Python 3.12 via uv
-scripts/build-deps.sh # libpqxx 8.0.2, cpp-httplib 0.61.0 and glaze 9.0.0 from source
+scripts/build-deps.sh # libpqxx, cpp-httplib, glaze and protobuf from source, and buf
 ```
 
 `setup-qt.sh` needs [uv](https://docs.astral.sh/uv/) to provide the Python
@@ -207,6 +209,7 @@ cmake --build --preset native --target update_translations
 ## Project layout
 
 ```text
+src/proto/     client-backend contract (Protobuf)
 src/backend/   backend: core (domain, persistence), api (HTTP, REST), server
 src/client/    Qt/QML client, native and WebAssembly
 tests/         automated tests (Qt Test, CTest)

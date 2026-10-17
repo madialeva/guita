@@ -1,0 +1,11 @@
+# buf module of the client-backend contract: style rules (lint) and the
+# compatibility rules checked by scripts/check-contract.sh (breaking)
+version: v2
+modules:
+  - path: .
+lint:
+  use:
+    - STANDARD
+breaking:
+  use:
+    - FILE

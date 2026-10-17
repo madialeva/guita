@@ -44,6 +44,7 @@ source code lives in `src/`, grouped by side of the architecture:
 
 ```text
 src/
+├── proto/            client-backend contract (Protobuf, package guita.v1, buf module)
 ├── backend/          backend, native only (never built for WASM)
 │   ├── core/         plain C++ + libpqxx: entities, stores (SQL), pool, migrations, services
 │   ├── api/          HTTP server, REST routes and Backend, shared by server and client
@@ -66,6 +67,23 @@ executable; `src/client/CMakeLists.txt` defines the `client` executable, which
 backs the `Guita` QML module (QML views plus the C++ types they use) next to
 its QML files, so the module needs no per-directory `qmldir` (Qt policy
 QTP0004). Executables are written to `build/<preset>/bin`.
+
+## Contract
+
+- `src/proto/` is the single definition of the client-backend API: messages
+  and services in Protobuf (package `guita.v1`), generated with `protoc` for
+  the backend (`contract`, `guita::v1`, never Qt) and with Qt Protobuf for the
+  client (`contract_qt`, `qtc::guita::v1`, native and WASM). Neither side
+  defines API message shapes by hand.
+- Evolution rules: never reuse or renumber a field; reserve the numbers and
+  names of removed fields; add instead of changing types or meanings; one
+  request and one response message per method (`<Method>Request`,
+  `<Method>Response`). Before a version is released anything may change; after
+  it, incompatible changes go to a new package (`guita.v2`).
+- `buf lint` and `buf format` (CTest `contract_lint`, `contract_format`) keep
+  the style; `buf breaking` checks compatibility with the development branch.
+- `int64` fields are not accessible from QML (Qt Protobuf makes them
+  non-scriptable): the client's repositories adapt messages for the views.
 
 ## Backend
 
@@ -205,8 +223,9 @@ include directory; project code never relies on it.
 
 - Dependencies that do not come from the system are installed without sudo in
   `~/software` (`SOFTWARE_DIR` in the scripts; the CMake presets assume
-  `~/software`): libpqxx 8.0.2, cpp-httplib 0.61.0 and glaze 9.0.0
-  (`scripts/build-deps.sh`), Qt 6.12.0 desktop + WASM and
+  `~/software`): libpqxx 8.0.2, cpp-httplib 0.61.0, glaze 9.0.0, protobuf
+  36.2 (with abseil, built with C++23) and buf 1.74.0 (`scripts/build-deps.sh`),
+  Qt 6.12.0 desktop + WASM with the `qtgrpc` module (Qt Protobuf) and
   emsdk 5.0.5 (`scripts/setup-qt.sh`). The emsdk version is the one the Qt WASM
   kit recommends (`QT_EMCC_RECOMMENDED_VERSION`); upgrade both together.
   Anything managed by `uv` (the Python ≥ 3.10 that Emscripten needs,
