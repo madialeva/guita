@@ -142,49 +142,81 @@ are prepared:
   is added. Table and column names are English `snake_case`; every table has a
   `bigserial` `id` and an integer `version`.
 
-### 4.3 REST API (`backend/api`)
+### 4.3 RPC API (`backend/api`)
 
-Routes are registered on the cpp-httplib server per resource
-(`addInvoiceRoutes()`), and are called **concurrently** from its thread pool,
-which is why services must be thread-safe. `Http.h` holds what every route
-shares:
+The API is the contract of `src/proto` (§3), served as unary RPC procedures.
+Dispatch does not depend on the transport:
 
-- `guarded()` wraps a handler with Bearer authorization and the error mapping.
-- `jsonBody<T>()` and `sendJson()` convert between JSON and plain structs with
-  glaze's compile-time reflection: the member names are the JSON field names.
-  Unknown fields are ignored, so newer clients keep working with older servers.
-- `rejectOtherMethods()` answers `405` with an `Allow` header.
+- **`RpcRouter`** knows procedures, not transports. It takes an `RpcCall`
+  (procedure, codec, encoded request, authorization) and returns an
+  `RpcResult` (Connect code, encoded response or error message). It checks the
+  authorization, finds the procedure, decodes and encodes with the codec, and
+  turns exceptions into codes: `std::invalid_argument` into
+  `invalid_argument` with its message, anything else into `internal`
+  (logged). Handlers are registered typed
+  (`add<Request, Response>("guita.v1.InvoiceService/CreateInvoice", ...)`),
+  and registering a method that is not in the contract, or with other types,
+  fails at startup. Once registered, `call()` is thread-safe.
+- **`InvoiceProcedures`** registers `guita.v1.InvoiceService` and converts
+  between the contract's messages and the domain structs of `core`, which
+  knows nothing of the contract.
+- **Transports** adapt their own framing to `RpcCall`: `HttpRpcTransport` for
+  the server, `Backend::call()` for in-process calls of the standalone client
+  (§6), and later a persistent WebSocket channel.
 
-| Method | Path | Body | Response |
-|---|---|---|---|
-| `GET` | `/api/invoices` | — | `200` `[{id, customer, customerTaxId, totalCents}, ...]` |
-| `POST` | `/api/invoices` | `{customer, customerTaxId, totalCents}` | `201` `{id, customer, customerTaxId, totalCents}` |
+| Procedure | Request | Response |
+|---|---|---|
+| `guita.v1.InvoiceService/ListInvoices` | `ListInvoicesRequest {}` | `ListInvoicesResponse { invoices }`, in creation order |
+| `guita.v1.InvoiceService/CreateInvoice` | `CreateInvoiceRequest { customer, optional customer_tax_id, total_cents }` | `CreateInvoiceResponse { invoice }` |
 
 The sample domain is a minimal invoice: a required customer, an optional
-customer tax ID and a total in cents, which must be a whole number between 0
-and 999 999 999 999. Numbering, dates and invoice lines are not modeled yet.
+customer tax ID (an empty one is stored as absent) and a total in cents, which
+must be a whole number between 0 and 999 999 999 999. Numbering, dates and
+invoice lines are not modeled yet. Error messages are English and not
+translated yet.
 
-JSON field names are English `camelCase` and form a public contract once
-released. Errors are `{"error": "..."}` with these status codes: `400`
-(validation, malformed JSON, with the position of the error), `401`
-(authentication), `405` (method), `415` (body not `application/json`), `500`
-(unexpected, logged). Error messages are English and not translated yet.
+**Over HTTP** (`HttpRpcTransport`), the unary subset of the Connect protocol:
 
-Responses are compressed with gzip when the client accepts it (cpp-httplib is
-built with zlib); request bodies are limited to 16 MiB.
+- `POST /api/<package>.<Service>/<Method>`, with the request in binary Protobuf
+  (`Content-Type: application/proto`, what the client uses) or in canonical
+  proto3 JSON (`application/json`, for debugging and tools: lowerCamelCase
+  names, `int64` written as strings and read as strings or numbers, unknown
+  fields ignored, fields without presence printed even when zero). The
+  response uses the request's codec; any other content type gets `415`.
+- `Connect-Protocol-Version: 1` is accepted and not required, so Connect
+  clients and tools such as `buf curl` can call the API with `/api` as prefix.
+- Errors are Connect errors, `{"code": "...", "message": "..."}` as JSON,
+  with these statuses: `invalid_argument` 400, `unauthenticated` 401,
+  `unimplemented` 404 (unknown procedure) or 415 (content type), `internal`
+  500; other HTTP methods on a procedure get `405` with `Allow: POST`.
+- Responses are compressed with gzip when the client accepts it (cpp-httplib is
+  built with zlib); request bodies are limited to 16 MiB.
+
+```sh
+curl -H 'Content-Type: application/json' -d '{}' \
+     http://127.0.0.1:8090/api/guita.v1.InvoiceService/ListInvoices
+curl -H 'Content-Type: application/json' -d '{"customer":"Acme","totalCents":"121000"}' \
+     http://127.0.0.1:8090/api/guita.v1.InvoiceService/CreateInvoice
+```
+
+The REST routes of the proof of concept (`/api/invoices`) are still served
+until the client moves to RPC, within this same change.
 
 ### 4.4 Backend and server
 
-`Backend` assembles database, services, routes and the HTTP server, and is
-shared by the `server` executable and standalone mode. It is configured with
-`BackendOptions` (connection string, authorizer, address, port, docroot, access
-log). Its constructor applies the migrations, prepares the statements and
-registers the routes, and throws on failure; `start()` binds the port and runs
-the server on its own thread pool without blocking. With port `0` the OS picks
-a free port, returned by `port()`.
+`Backend` assembles database, services, the RPC router and, optionally, the
+HTTP transport, and is shared by the `server` executable and standalone mode.
+It is configured with `BackendOptions`: connection string, authorizer and
+optional `HttpOptions` (address, port, docroot, access log). Its constructor
+applies the migrations, prepares the statements and registers the procedures,
+and throws on failure. `call()` runs a procedure in the caller's thread;
+`start()` binds the port and runs the HTTP server on its own thread pool
+without blocking (with port `0` the OS picks a free port, returned by
+`port()`). Without `HttpOptions` nothing listens on the network.
 
-`Backend.h` includes neither cpp-httplib nor libpqxx (pimpl), so the client
-only sees that small interface.
+`Backend.h` exposes only `RpcCall`, `RpcResult` and standard types, and
+includes neither cpp-httplib, libpqxx nor protobuf (pimpl), so the client only
+sees that small interface.
 
 With a docroot, the same server serves the WASM files (`.wasm` as
 `application/wasm`). The `server` executable blocks `SIGINT` and `SIGTERM`
@@ -199,8 +231,8 @@ It is configured through environment variables:
 | `DOCROOT` | `./web` | static files (WASM build) |
 | `API_TOKEN` | empty | required Bearer token; empty accepts everything (development only) |
 
-cpp-httplib also supports WebSockets (`Server::WebSocket()`), the planned
-channel for real-time notifications.
+cpp-httplib also supports WebSockets (`Server::WebSocket()`), a candidate for
+the planned persistent channel (§11).
 
 ## 5. Client
 
@@ -415,6 +447,8 @@ application's default connection string.
 | `invoicestore` | `db` | exact cents ↔ `numeric(12,2)` (0.05, 1234.50, maximum), `NULL` tax ID, listing order |
 | `database` | `db` | pool with more threads than connections, rollback on exceptions, fail-fast statements, backend refusing a mismatched schema |
 | `restapi` | `api` | the REST contract: 201/200 shapes, 401, 400 (validation and malformed JSON), 415, 405 with `Allow`, unknown fields, `NULL` tax ID, gzip |
+| `rpcrouter` | `unit` | `RpcRouter` without any transport: both codecs, authorization, unknown procedures, malformed messages, exceptions to codes, procedures outside the contract refused, concurrent calls |
+| `rpcapi` | `api` | the RPC API over HTTP: both procedures in binary and JSON, absent tax ID, unknown fields, Connect errors (400, 401, 404, 405, 415), and an in-process `Backend` that listens on no port |
 | `invoicerepository` | `client` | `ApiConnection` + `InvoiceRepository` against an embedded backend: list, create, the backend's validation message, a wrong token, an unreachable backend |
 | `amount` | `qml` | `Amount.js`: typed amounts with comma or dot, limits and rejections, and their display per locale |
 

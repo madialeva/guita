@@ -20,8 +20,13 @@ First version: a proof of concept of the architecture, to be released as 0.1.0.
   PostgreSQL access through prepared statements (libpqxx) and JSON with
   compile-time reflection (glaze).
 - Sample invoicing domain: create and list invoices (customer, optional tax ID
-  and total) through `GET /api/invoices` and `POST /api/invoices`, with JSON
-  errors and gzip-compressed responses.
+  and total).
+- Typed client-backend contract in Protobuf (`src/proto`, package `guita.v1`),
+  the single source of the code of both sides, with style and compatibility
+  checks (buf).
+- RPC API compatible with the Connect protocol: `POST
+  /api/guita.v1.InvoiceService/<Method>` in binary Protobuf or JSON, with
+  Connect errors and gzip-compressed responses.
 - Exact money handling: integer cents in C++ and JSON, `numeric(12,2)` in
   PostgreSQL.
 - Automatic PostgreSQL schema migrations on every start.
@@ -31,7 +36,7 @@ First version: a proof of concept of the architecture, to be released as 0.1.0.
 - Scripts to install the toolchain and libraries without root privileges, build
   the web client, run the server and create the database.
 - README and architecture documentation.
-- Automated test suite run with `ctest --preset native`: backend, REST API,
+- Automated test suite run with `ctest --preset native`: backend, RPC API,
   client and QML amount logic, with an ephemeral PostgreSQL container started
   and removed by the test run (or an existing server in `GUITA_TEST_DB`), and
   labels to run subsets such as the suites that need no database.

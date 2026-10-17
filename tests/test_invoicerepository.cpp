@@ -17,6 +17,7 @@ private slots:
         m_backend = std::make_unique<Backend>(BackendOptions{
             .connectionString = m_db->connectionString(),
             .authorizer = tokenAuthorizer(kToken),
+            .http = HttpOptions{},
         });
         QVERIFY(m_backend->start());
         m_connection.reset(connect(m_backend->port(), kToken));

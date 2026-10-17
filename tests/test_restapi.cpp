@@ -19,6 +19,7 @@ private slots:
         m_backend = std::make_unique<Backend>(BackendOptions{
             .connectionString = m_db->connectionString(),
             .authorizer = tokenAuthorizer(kToken),
+            .http = HttpOptions{},
         });
         QVERIFY(m_backend->start());
         // Decompresses gzip responses transparently, like a browser

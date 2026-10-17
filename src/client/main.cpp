@@ -62,6 +62,7 @@ int main(int argc, char *argv[]) {
             backend = std::make_unique<Backend>(BackendOptions{
                 .connectionString = connection.toStdString(),
                 .authorizer = tokenAuthorizer(token.toStdString()),
+                .http = HttpOptions{},
             });
         } catch (const std::exception &e) {
             qCritical("Could not start the embedded backend: %s", e.what());

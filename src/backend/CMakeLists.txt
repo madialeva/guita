@@ -10,9 +10,13 @@ add_library(core STATIC
 target_include_directories(core PUBLIC ${GUITA_INCLUDE_ROOT})
 target_link_libraries(core PUBLIC libpqxx::pqxx Threads::Threads)
 
-# REST routes and Backend (cpp-httplib), shared by server and standalone client
-add_library(api STATIC api/Http.cpp api/InvoiceRoutes.cpp api/Backend.cpp)
-target_link_libraries(api PUBLIC core PRIVATE httplib::httplib glaze::glaze)
+# RPC router, its HTTP transport (cpp-httplib) and Backend, shared by the server
+# and the standalone client; still serves the REST routes until the client
+# moves to RPC
+add_library(api STATIC
+    api/RpcRouter.cpp api/HttpRpcTransport.cpp api/InvoiceProcedures.cpp
+    api/Http.cpp api/InvoiceRoutes.cpp api/Backend.cpp)
+target_link_libraries(api PUBLIC core contract PRIVATE httplib::httplib glaze::glaze)
 
 add_executable(server server/main.cpp)
 target_link_libraries(server PRIVATE api)

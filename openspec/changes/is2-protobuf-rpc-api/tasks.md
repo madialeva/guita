@@ -13,12 +13,12 @@
 
 ## 3. Backend RPC
 
-- [ ] 3.1 Crear `RpcRouter` en `backend/api`, independiente del transporte (`RpcCall`/`RpcResult`, registro tipado de handlers, códecs binario y JSON, autorización, códigos de Connect), con la suite `rpcrouter` (`unit`) que lo prueba con procedimientos de prueba y sin ningún transporte; verificar con `ctest --preset native -L unit`
-- [ ] 3.2 Crear `HttpRpcTransport` sobre cpp-httplib (ruta de procedimientos, códec por `Content-Type`, 415, 405 con `Allow: POST`, estados HTTP de Connect, cuerpo JSON de error con `google.protobuf.Struct`); verificar con las pruebas de la tarea 3.4
-- [ ] 3.3 Implementar `ListInvoices` y `CreateInvoice` sobre `InvoiceService` con la conversión entre mensajes y structs de `core`, servidos junto a las rutas REST hasta que el cliente cambie (grupo 4); verificar que `server` compila y atiende ambos
-- [ ] 3.4 Añadir la suite `rpcapi` (`api`): los dos procedimientos en binario y en JSON, NIF ausente, campos desconocidos y los errores 400, 401, 404, 405 y 415 con sus códigos; verificar con `ctest --preset native -L api`
-- [ ] 3.5 Hacer opcional la parte HTTP de `BackendOptions` y añadir `Backend::call(RpcCall)` con tipos estándar en `Backend.h`; verificar que `server` sigue igual (`rpcapi`) y que un `Backend` sin HTTP atiende llamadas en proceso sin escuchar en la red
-- [ ] 3.6 Actualizar `docs/architecture.md` (§4.3 pasa a describir el contrato RPC, el despacho independiente del transporte y sus errores) y el CHANGELOG; verificar que los ejemplos de JSON documentados funcionan con `curl` tal cual
+- [x] 3.1 Crear `RpcRouter` en `backend/api`, independiente del transporte (`RpcCall`/`RpcResult`, registro tipado de handlers, códecs binario y JSON, autorización, códigos de Connect), con la suite `rpcrouter` (`unit`) que lo prueba con procedimientos de prueba y sin ningún transporte; verificar con `ctest --preset native -L unit`
+- [x] 3.2 Crear `HttpRpcTransport` sobre cpp-httplib (ruta de procedimientos, códec por `Content-Type`, 415, 405 con `Allow: POST`, estados HTTP de Connect, cuerpo JSON de error con `google.protobuf.Struct`); verificar con las pruebas de la tarea 3.4
+- [x] 3.3 Implementar `ListInvoices` y `CreateInvoice` sobre `InvoiceService` con la conversión entre mensajes y structs de `core`, servidos junto a las rutas REST hasta que el cliente cambie (grupo 4); verificar que `server` compila y atiende ambos
+- [x] 3.4 Añadir la suite `rpcapi` (`api`): los dos procedimientos en binario y en JSON, NIF ausente, campos desconocidos y los errores 400, 401, 404, 405 y 415 con sus códigos; verificar con `ctest --preset native -L api`
+- [x] 3.5 Hacer opcional la parte HTTP de `BackendOptions` y añadir `Backend::call(RpcCall)` con tipos estándar en `Backend.h`; verificar que `server` sigue igual (`rpcapi`) y que un `Backend` sin HTTP atiende llamadas en proceso sin escuchar en la red
+- [x] 3.6 Actualizar `docs/architecture.md` (§4.3 pasa a describir el contrato RPC, el despacho independiente del transporte y sus errores) y el CHANGELOG; verificar que los ejemplos de JSON documentados funcionan con `curl` tal cual
 
 ## 4. Cliente
 

@@ -82,6 +82,7 @@ private slots:
         QVERIFY_THROWS_EXCEPTION(pqxx::sql_error, Backend(BackendOptions{
             .connectionString = mismatched.connectionString(),
             .authorizer = tokenAuthorizer("unused"),
+            .http = HttpOptions{},
         }));
     }
 

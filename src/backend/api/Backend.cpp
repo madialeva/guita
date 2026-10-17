@@ -1,5 +1,8 @@
 #include <backend/api/Backend.h>
+#include <backend/api/HttpRpcTransport.h>
+#include <backend/api/InvoiceProcedures.h>
 #include <backend/api/InvoiceRoutes.h>
+#include <backend/api/RpcRouter.h>
 #include <backend/core/Database.h>
 #include <backend/core/InvoiceService.h>
 #include <backend/core/Migrations.h>
@@ -10,7 +13,7 @@
 #include <thread>
 
 namespace {
-// One connection per HTTP worker is plenty for request/response handlers
+// One connection per worker is plenty for request/response handlers
 constexpr std::size_t kPoolSize = 8;
 // Largest accepted request body
 constexpr std::size_t kMaxRequestBody = 16 * 1024 * 1024;
@@ -20,17 +23,23 @@ struct Backend::Impl {
     explicit Impl(BackendOptions o)
         : options(std::move(o)),
           db(options.connectionString, kPoolSize, prepareStatements),
-          invoices(db) {
+          invoices(db),
+          router(options.authorizer) {
         {
             pqxx::connection connection(options.connectionString);
             applyMigrations(connection);
         }
         db.warmUp();          // after the migrations: the statements need the schema
+        addInvoiceProcedures(router, invoices);
+        if (options.http)
+            setUpHttp(*options.http);
+    }
 
+    void setUpHttp(const HttpOptions &o) {
         http.set_payload_max_length(kMaxRequestBody);
-        if (!options.docroot.empty() && !http.set_mount_point("/", options.docroot))
-            throw std::runtime_error("Docroot not found: " + options.docroot);
-        if (options.accessLog) {
+        if (!o.docroot.empty() && !http.set_mount_point("/", o.docroot))
+            throw std::runtime_error("Docroot not found: " + o.docroot);
+        if (o.accessLog) {
             http.set_logger([](const httplib::Request &req, const httplib::Response &res) {
                 // Static files are streamed: their body is not in memory
                 std::cerr << req.remote_addr << ' ' << req.method << ' ' << req.path << ' ' << res.status;
@@ -38,12 +47,14 @@ struct Backend::Impl {
                 std::cerr << '\n';
             });
         }
-        addInvoiceRoutes(http, invoices, options.authorizer);
+        addRpcRoutes(http, router);
+        addInvoiceRoutes(http, invoices, options.authorizer);   // REST, until the client moves to RPC
     }
 
     BackendOptions  options;
     Database        db;
     InvoiceService  invoices;
+    RpcRouter       router;
     httplib::Server http;
     std::thread     listener;
     int             boundPort = 0;
@@ -53,9 +64,11 @@ Backend::Backend(BackendOptions options) : d(std::make_unique<Impl>(std::move(op
 
 Backend::~Backend() { stop(); }
 
+RpcResult Backend::call(const RpcCall &call) const { return d->router.call(call); }
+
 bool Backend::start() {
-    if (d->listener.joinable()) return true;
-    const auto &o = d->options;
+    if (!d->options.http || d->listener.joinable()) return true;
+    const auto &o = *d->options.http;
     d->boundPort = o.port == 0 ? d->http.bind_to_any_port(o.address)
                                : (d->http.bind_to_port(o.address, o.port) ? o.port : -1);
     if (d->boundPort <= 0) return false;

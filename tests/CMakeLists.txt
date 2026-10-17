@@ -49,14 +49,16 @@ guita_add_test(contract LABELS unit LIBS contract contract_qt Qt6::Protobuf)
 # Backend without database
 guita_add_test(invoiceservice LABELS unit LIBS core)
 guita_add_test(authorizer LABELS unit LIBS api)
+guita_add_test(rpcrouter LABELS unit LIBS api contract)
 
 # Backend with database
 guita_add_test(migrations LABELS db LIBS core DATABASE)
 guita_add_test(invoicestore LABELS db LIBS core DATABASE)
 guita_add_test(database LABELS db LIBS api DATABASE)
 
-# REST API
+# REST API (until the client moves to RPC) and RPC API
 guita_add_test(restapi LABELS api LIBS api httplib::httplib DATABASE)
+guita_add_test(rpcapi LABELS api LIBS api contract httplib::httplib DATABASE)
 
 # Client: its classes are compiled into the suite, since they live in the
 # client executable that backs the QML module
