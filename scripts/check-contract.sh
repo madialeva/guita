@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Checks that the contract (src/proto) stays compatible with the one on the
 # development branch: buf breaking with the rules of src/proto/buf.yaml
-# (FILE: no reused, renumbered or retyped fields, no removals without
-# reserving them, ...).
+# (WIRE_JSON: no renumbered, retyped or renamed fields, no removals without
+# reserving their number and name, ...). The CI runs it on every push and pull
+# request.
 #
 #   scripts/check-contract.sh [<git ref>]
 #

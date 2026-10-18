@@ -131,7 +131,10 @@ the emsdk that `setup-qt.sh` installs (without it, that part is skipped with a
 warning).
 
 `setup-qt.sh` needs [uv](https://docs.astral.sh/uv/) to provide the Python
-that Emscripten requires when the system one is older than 3.10. The CMake
+that Emscripten requires when the system one is older than 3.10. To build only
+the server, the desktop client and the tests, `scripts/setup-qt.sh
+--desktop-only` installs just the desktop kit, without the WebAssembly kit,
+emsdk or Python. The CMake
 presets look for Qt and the libraries where these scripts install them; when
 they live elsewhere, pass `-DCMAKE_PREFIX_PATH="<qt-prefix>;<libpqxx-prefix>;..."` to the native
 build, or add a `CMakeUserPresets.json` (for the web build it also sets the Qt

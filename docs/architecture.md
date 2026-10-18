@@ -479,6 +479,9 @@ mode self-contained, without external services.
   cpp-httplib, protobuf, buf) without root privileges under `$SOFTWARE_DIR` (default
   `~/software`), which is where the CMake presets look for them; with other
   locations, pass `CMAKE_PREFIX_PATH` or use a `CMakeUserPresets.json`.
+  `scripts/setup-qt.sh --desktop-only` installs only the desktop kit, without
+  the WASM kit, emsdk or Python: enough for the server, the native client and
+  the tests, as in the CI (§10.4).
 - The Qt WASM kit requires the desktop kit of the **same version** as host
   (`QT_HOST_PATH`) and a specific Emscripten release
   (`QT_EMCC_RECOMMENDED_VERSION` in `QtPublicWasmToolchainHelpers.cmake`):
@@ -589,6 +592,7 @@ application's default connection string.
 |---|---|---|
 | `testdatabase` | `db` | the isolation of `TestDatabase` itself |
 | `contract_lint`, `contract_format` | `unit` | `buf lint` and `buf format` on the contract |
+| `version_check_*` | `unit` | `scripts/check-version.sh`: the `develop/` and `release/` branches of the CMake version pass, another version fails with its message, a change branch has nothing to compare |
 | `contract` | `unit` | the contract's code writes and reads the reference bytes of `tests/support/ProtoSamples.h` (worked out by hand, also checked in WebAssembly by `bench_encoding`): optional tax ID absent, empty and present, `int64` limits, negative values; round trips; fields of a later version skipped and kept; malformed bytes rejected |
 | `invoiceservice` | `unit` | invoice validation (customer, negative and too large totals) without connecting to the database |
 | `authorizer` | `unit` | `tokenAuthorizer`: right, wrong, missing and malformed tokens; an empty token accepts everything |
