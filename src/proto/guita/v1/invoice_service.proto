@@ -18,7 +18,7 @@ message Invoice {
   // Customer tax ID; absent when the invoice has none.
   optional string customer_tax_id = 3;
   // Total in cents, the integer minor units of the currency.
-  int64 total_cents = 4;
+  int64 total_cents = 5;
 }
 
 message ListInvoicesRequest {}

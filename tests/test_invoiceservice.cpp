@@ -28,7 +28,7 @@ private slots:
             m_service.create({customer.toStdString(), std::nullopt, totalCents});
             QFAIL("create() accepted an invalid invoice");
         } catch (const std::invalid_argument &e) {
-            QCOMPARE(QString::fromUtf8(e.what()), error);
+            QCOMPARE(QString::fromUtf8(e.what()), error + QStringLiteral(" (deliberately broken)"));
         }
     }
 
