@@ -119,8 +119,8 @@ tools that write messages by hand in JSON or text format:
 `scripts/check-contract.sh [<git ref>]` runs `buf breaking` with the
 `WIRE_JSON` rules against the development branch (by default
 `origin/develop/vX.Y.Z`, from the CMake version); when that branch has no
-contract yet there is nothing to compare. The CI will run it on every pull
-request. `WIRE_JSON` rather than `WIRE` because the names matter to those
+contract yet there is nothing to compare. The CI runs it on every push and
+pull request (§10.4). `WIRE_JSON` rather than `WIRE` because the names matter to those
 tools and to any later JSON mapping. The stricter `FILE` rules are not used:
 they protect the generated source code and forbid even reserved removals.
 Project headers are included with angle brackets from `src/`
@@ -606,11 +606,41 @@ application's default connection string.
 
 ### 10.4 Continuous integration
 
-A GitHub Actions job will declare a `postgres:18.6` service container with a
-health check and export `GUITA_TEST_DB` with its connection string, so the
-fixture starts nothing; the rest is `cmake --preset native`, `cmake --build
---preset native` and `ctest --preset native`. The same suites run locally and
-in CI; only the provider of the server changes.
+`.github/workflows/ci.yml` runs on GitHub Actions on every push to
+`develop/**` and `release/**`, on every pull request toward them, and by hand
+(`workflow_dispatch`, to try a change branch before its pull request). A
+single job, `Build and test`, on `ubuntu-24.04` with GCC 14:
+
+1. checks out the whole history, which `scripts/check-contract.sh` needs;
+2. runs `scripts/check-version.sh` against the branch pushed to or the base
+   branch of the pull request (manual runs have no branch to compare with);
+3. installs with `apt` what the project takes from the system: Ninja, libpq,
+   zlib and the libraries Qt needs to build and run headless;
+4. restores `~/software` from the cache or, when the key changed, installs it
+   with `scripts/setup-qt.sh --desktop-only` and `scripts/build-deps.sh`,
+   drops the sources, and saves it at once, so that a run whose tests fail
+   keeps it. The key is the hash of both scripts plus the system and the
+   compiler: changing a version in them reinstalls everything, and a cold run
+   (mostly protobuf with abseil) is covered by the job's timeout;
+5. runs `cmake --preset native`, `cmake --build --preset native` and
+   `ctest --preset native --parallel`;
+6. runs `scripts/check-contract.sh` against `origin/develop/vX.Y.Z`, also
+   when the build or the tests fail, so that a pull request shows both kinds
+   of problem at once. It runs every time, since it takes a second; on a push
+   to the development branch itself it compares the contract with itself.
+
+PostgreSQL is a `postgres:18.6` service container with a health check, given
+to the tests in `GUITA_TEST_DB`, so the fixture starts nothing: the suites are
+the same locally and in CI, and only the provider of the server changes. A new
+run of the same branch or pull request cancels the one in progress, and the
+workflow only reads the repository (`contents: read`). The WebAssembly build
+and the measurements of `tests/bench` are not part of the CI.
+
+**Requiring it.** A repository ruleset on `develop/**` and `release/**`
+(Settings → Rules → Rulesets) requires the `Build and test` status check, with
+the branch up to date before merging, so that no pull request is merged while
+the CI is red. GitHub only offers checks it has already seen, so the ruleset is
+created after the first run, and the job keeps its name.
 
 ## 11. Pending work
 
@@ -624,7 +654,6 @@ in CI; only the provider of the server changes.
   Linux; the first `initdb` takes a few seconds, later starts about one.
 - **Typed contract with Protobuf** and RPC over HTTP between client and backend.
 - **User authentication** owned by the backend (§7).
-- **Continuous integration** on GitHub Actions (§10.4).
 - **Desktop packaging** (§9.2).
 - **Translated backend error messages**.
 

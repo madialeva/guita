@@ -44,3 +44,13 @@ First version: a proof of concept of the architecture, to be released as 0.1.0.
 - Measurement programs for message encodings and transport latency, native
   and WebAssembly (`bench` and `wasm-bench` presets), with their results in
   the architecture document.
+- Continuous integration on GitHub Actions: every push to a development or
+  release branch and every pull request toward one builds the project, runs
+  the whole test suite against PostgreSQL 18.6, checks that the contract stays
+  compatible with the development branch and that the version in
+  `CMakeLists.txt` matches the branch name. A status badge in the README shows
+  the result.
+- `scripts/setup-qt.sh --desktop-only` installs only the desktop Qt kit, enough
+  for the server, the desktop client and the tests.
+- `scripts/check-version.sh <branch>` checks the project version against a
+  `develop/vX.Y.Z` or `release/vX.Y.Z` branch.

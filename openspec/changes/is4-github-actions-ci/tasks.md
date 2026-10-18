@@ -9,15 +9,15 @@
 
 ## 2. Workflow de GitHub Actions
 
-- [ ] 2.1 Crear `.github/workflows/ci.yml` según el diseño:
+- [x] 2.1 Crear `.github/workflows/ci.yml` según el diseño:
   - disparadores: push a `develop/**` y `release/**`, PR hacia ellas y `workflow_dispatch`;
   - `concurrency`, `permissions: contents: read` y `timeout-minutes`;
   - un job con nombre fijo en `ubuntu-24.04` con GCC 14 y el servicio `postgres:18.6` con *health check* y `GUITA_TEST_DB`;
   - checkout con `fetch-depth: 0`, `check-version.sh` contra `base_ref` o `ref_name` (salvo en `workflow_dispatch`), paquetes de `apt`, caché restore/save de `~/software` con instalación entre medias y borrado de `~/software/src` y `aqt-venv`, configuración, compilación, `ctest -j` y `check-contract.sh`.
 
   Verificar que `actionlint` (imagen Docker `rhysd/actionlint`, sin instalarla en el proyecto) no da avisos.
-- [ ] 2.2 Reproducir en local los pasos del job en un contenedor `ubuntu:24.04` con un `HOME` vacío y GCC 14, y el PostgreSQL en `GUITA_TEST_DB`, para fijar la lista de paquetes de `apt` que necesitan Qt y el proyecto. Verificar que en el contenedor `ctest --preset native` pasa completo y `check-contract.sh` termina bien.
-- [ ] 2.3 Documentar el CI:
+- [x] 2.2 Reproducir en local los pasos del job en un contenedor `ubuntu:24.04` con un `HOME` vacío y GCC 14, y el PostgreSQL en `GUITA_TEST_DB`, para fijar la lista de paquetes de `apt` que necesitan Qt y el proyecto. Verificar que en el contenedor `ctest --preset native` pasa completo y `check-contract.sh` termina bien.
+- [x] 2.3 Documentar el CI:
   - `docs/architecture.md`: §10.4 con el workflow real, la caché y el ruleset que exige el check; §3 y §11;
   - AGENTS.md: la comprobación de versión y el contrato en presente;
   - README: badge, fila "Continuous integration" en ✅, mención del CI en Testing;

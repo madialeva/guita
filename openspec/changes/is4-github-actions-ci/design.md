@@ -78,7 +78,7 @@ El job declara el servicio `postgres:18.6`:
 2. `scripts/check-version.sh` contra la rama de referencia: `github.base_ref` en un PR y `github.ref_name` en un push. En una ejecución manual no hay rama de referencia y el paso no se ejecuta. Va primero porque es instantáneo.
 3. Paquetes del sistema y toolchain (decisiones 1 a 3).
 4. `cmake --preset native`, `cmake --build --preset native` y `ctest --preset native -j"$(nproc)"`. El preset ya muestra la salida de las suites que fallan.
-5. `scripts/check-contract.sh` sin argumentos: el propio script deduce `origin/develop/vX.Y.Z` de la versión de `CMakeLists.txt`.
+5. `scripts/check-contract.sh` sin argumentos: el propio script deduce `origin/develop/vX.Y.Z` de la versión de `CMakeLists.txt`. Se ejecuta aunque fallen la compilación o las pruebas (`!cancelled()`), para que un PR muestre los dos tipos de problema a la vez.
 
 `check-contract.sh` se ejecuta siempre, no solo cuando el PR toca `src/proto/`. Tarda un segundo, y filtrar por rutas exigiría una acción de terceros o lógica propia con `git diff`. En un push a la propia `develop/vX.Y.Z` compara el contrato consigo mismo y pasa; en un PR o en `release/vX.Y.Z` compara con la rama de desarrollo, que es lo que importa.
 

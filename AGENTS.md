@@ -88,7 +88,7 @@ QTP0004). Executables are written to `build/<preset>/bin`.
 - `buf lint` and `buf format` (CTest `contract_lint`, `contract_format`) keep
   the style. Every change to `src/proto` also runs `scripts/check-contract.sh`
   (`buf breaking` with the `WIRE_JSON` rules against the development branch,
-  `origin/develop/vX.Y.Z`), which must pass; the CI will run it on every PR.
+  `origin/develop/vX.Y.Z`), which must pass; the CI runs it on every push and PR.
   `WIRE_JSON` protects deployed clients and servers of other versions in binary
   and JSON; `FILE` is not used because it forbids even reserved removals.
 - QML never sees the contract's messages: the client's repositories adapt
@@ -176,6 +176,12 @@ context properties, `qmlRegister*` calls or objects injected from `main.cpp`:
 - API responses are checked by parsing them with Qt (`QJsonDocument`), not with
   the library the code under test uses.
 - Keep the suite table in `docs/architecture.md` (§10.3) up to date.
+- The CI (`.github/workflows/ci.yml`, GitHub Actions, `ubuntu-24.04` with
+  GCC 14) runs the same `ctest --preset native` against a `postgres:18.6`
+  service container in `GUITA_TEST_DB`, with the toolchain of
+  `scripts/setup-qt.sh --desktop-only` and `scripts/build-deps.sh`, cached on
+  the hash of both scripts. A new system dependency also goes to the
+  workflow's `apt` list; it is described in `docs/architecture.md` §10.4.
 - Measurements live in `tests/bench`, outside `ctest`: built in Release with
   the `bench` and `wasm-bench` presets; their results are documented in
   `docs/architecture.md` (§4.5) and are refreshed when what they measure changes.
@@ -306,8 +312,9 @@ currently under development. Releasing cuts `release/vX.Y.Z` from it and tags
 `develop/vX.Y.Z` is created from the released tag and becomes the default
 branch. The program version lives as the single source of truth in
 `CMakeLists.txt` (`project(... VERSION ...)`) and must match the branch suffix;
-a Linux CI workflow (to be added) will enforce it on `develop/**` and
-`release/**` pushes.
+the Linux CI (`.github/workflows/ci.yml`) checks it with
+`scripts/check-version.sh` on `develop/**` and `release/**` pushes and on the
+pull requests toward them.
 
 Each OpenSpec change is tracked on GitHub with this cycle:
 
