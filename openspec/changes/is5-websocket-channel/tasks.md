@@ -69,8 +69,8 @@
 
 ## 6. Reconexión del cliente
 
-- [ ] 6.1 Crear `tests/support/CuttingProxy` (`QTcpServer`) que reenvía en los dos sentidos, puede retener lo que va del servidor al cliente y corta las dos conexiones a voluntad; verificar con un caso propio de la suite del grupo 6.2 que un cliente pasa a través del proxy sin cortes
-- [ ] 6.2 Crear la suite `reconnection` (`client`, `DATABASE`) con el proxy entre `WebSocketTransport` y un `Backend` con HTTP. Debe cubrir:
+- [x] 6.1 Crear `tests/support/CuttingProxy` (`QTcpServer`) que reenvía en los dos sentidos, puede retener lo que va del servidor al cliente y corta las dos conexiones a voluntad; verificar con un caso propio de la suite del grupo 6.2 que un cliente pasa a través del proxy sin cortes
+- [x] 6.2 Crear la suite `reconnection` (`client`, `DATABASE`) con el proxy entre `WebSocketTransport` y un `Backend` con HTTP. Debe cubrir:
   - creación con clave cortada tras la confirmación en la base de datos y antes de la respuesta: reenviada, con la misma factura y una sola fila;
   - llamada `Repeat::Never` en vuelo: falla con "Connection to the backend lost" y no se reenvía;
   - suscripción restablecida con `watching` de nuevo y la factura creada durante el corte en la lista recargada;
@@ -79,7 +79,7 @@
   - `available` a `false` durante el corte y a `true` al volver.
 
   Con `Options` cortas, verificar con `ctest --preset native -L client -j8` varias veces seguidas, sin fallos intermitentes
-- [ ] 6.3 Documentar la reconexión y el reenvío en `docs/architecture.md` (§5.1) y la suite en §10.3; verificar que los plazos y esperas documentados coinciden con los valores por defecto de `WebSocketTransport::Options`
+- [x] 6.3 Documentar la reconexión y el reenvío en `docs/architecture.md` (§5.1) y la suite en §10.3; verificar que los plazos y esperas documentados coinciden con los valores por defecto de `WebSocketTransport::Options`
 
 ## 7. Medición
 

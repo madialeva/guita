@@ -79,15 +79,18 @@ guita_add_test(channel LABELS api LIBS api contract httplib::httplib DATABASE)
 # Client: its classes are compiled into the suite, since they live in the
 # client executable that backs the QML module
 set(GUITA_CLIENT_DIR ${PROJECT_SOURCE_DIR}/src/client)
+set(GUITA_CLIENT_SOURCES
+    ${GUITA_CLIENT_DIR}/ApiConnection.h ${GUITA_CLIENT_DIR}/ApiConnection.cpp
+    ${GUITA_CLIENT_DIR}/ApiTransport.h
+    ${GUITA_CLIENT_DIR}/WebSocketTransport.h ${GUITA_CLIENT_DIR}/WebSocketTransport.cpp
+    ${GUITA_CLIENT_DIR}/InProcTransport.h ${GUITA_CLIENT_DIR}/InProcTransport.cpp
+    ${GUITA_CLIENT_DIR}/InvoiceRepository.h ${GUITA_CLIENT_DIR}/InvoiceRepository.cpp
+    ${GUITA_CLIENT_DIR}/InvoiceRow.h)
 guita_add_test(invoicerepository LABELS client
-    LIBS api contract Qt6::WebSockets Qt6::Qml
-    SOURCES ${GUITA_CLIENT_DIR}/ApiConnection.h ${GUITA_CLIENT_DIR}/ApiConnection.cpp
-            ${GUITA_CLIENT_DIR}/ApiTransport.h
-            ${GUITA_CLIENT_DIR}/WebSocketTransport.h ${GUITA_CLIENT_DIR}/WebSocketTransport.cpp
-            ${GUITA_CLIENT_DIR}/InProcTransport.h ${GUITA_CLIENT_DIR}/InProcTransport.cpp
-            ${GUITA_CLIENT_DIR}/InvoiceRepository.h ${GUITA_CLIENT_DIR}/InvoiceRepository.cpp
-            ${GUITA_CLIENT_DIR}/InvoiceRow.h
-    DATABASE)
+    LIBS api contract Qt6::WebSockets Qt6::Qml SOURCES ${GUITA_CLIENT_SOURCES} DATABASE)
+# The channel's transport when connections are lost, through a cutting proxy
+guita_add_test(reconnection LABELS client
+    LIBS api contract Qt6::WebSockets Qt6::Qml SOURCES ${GUITA_CLIENT_SOURCES} support/CuttingProxy.h DATABASE)
 
 # QML logic (Qt Quick Test): the tst_*.qml cases in tests/qml
 guita_add_test(amount LABELS qml LIBS Qt6::QuickTest)
