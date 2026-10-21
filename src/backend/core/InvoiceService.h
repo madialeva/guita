@@ -8,6 +8,8 @@
 class InvoiceService {
 public:
     explicit InvoiceService(Database &db) : m_db(db) {}
+    // With a request ID (a UUID), a repeated creation returns the invoice
+    // created the first time; the same key with different data is rejected
     Invoice create(NewInvoice invoice);
     std::vector<Invoice> list();
 

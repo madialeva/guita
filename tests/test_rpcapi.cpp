@@ -93,6 +93,32 @@ private slots:
                                      pqxx::params{created.invoice().id()}));
     }
 
+    void createsOnceWithARequestId() {
+        const auto request = create("Keyed S.L.", 7700, std::nullopt, kRequestId);
+        v1::CreateInvoiceResponse first, second;
+        auto res = post(kCreate, "application/proto", request);
+        QVERIFY(res);
+        QCOMPARE(res->status, 200);
+        QVERIFY(first.ParseFromString(res->body));
+        res = post(kCreate, "application/proto", request);
+        QVERIFY(res);
+        QCOMPARE(res->status, 200);
+        QVERIFY(second.ParseFromString(res->body));
+        QCOMPARE(second.invoice().id(), first.invoice().id());
+
+        pqxx::connection connection(m_db->connectionString());
+        pqxx::nontransaction tx(connection);
+        QCOMPARE(tx.query_value<int>("SELECT count(*) FROM invoices WHERE customer = 'Keyed S.L.'"), 1);
+    }
+
+    void rejectsAMalformedRequestId() {
+        const auto res = post(kCreate, "application/proto", create("Acme", 1, std::nullopt, "not-a-uuid"));
+        QVERIFY(res);
+        QCOMPARE(res->status, 400);
+        QCOMPARE(json(res).object().value("code").toString(), QStringLiteral("invalid_argument"));
+        QCOMPARE(json(res).object().value("message").toString(), QStringLiteral("request_id must be a UUID"));
+    }
+
     void acceptsTheConnectProtocolHeader() {
         httplib::Headers headers{{"Authorization", std::string("Bearer ") + kToken},
                                  {"Connect-Protocol-Version", "1"}};
@@ -217,13 +243,16 @@ private:
         return m_client->Post(std::string("/api/") + procedure, auth(), body, contentType);
     }
 
-    // A CreateInvoiceRequest; taxId absent unless given
+    static constexpr const char *kRequestId = "9b2f0c1e-5d43-4a8e-b6f7-0e1d2c3b4a59";
+
+    // A CreateInvoiceRequest; taxId absent and no request ID unless given
     static std::string create(const std::string &customer, std::int64_t totalCents,
-                              std::optional<std::string> taxId = std::nullopt) {
+                              std::optional<std::string> taxId = std::nullopt, const std::string &requestId = {}) {
         v1::CreateInvoiceRequest request;
         request.set_customer(customer);
         if (taxId) request.set_customer_tax_id(*taxId);
         request.set_total_cents(totalCents);
+        request.set_request_id(requestId);
         return request.SerializeAsString();
     }
 

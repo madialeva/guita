@@ -30,7 +30,10 @@ void addInvoiceProcedures(RpcRouter &router, InvoiceService &service) {
                                request.has_customer_tax_id()
                                    ? std::optional<std::string>(request.customer_tax_id())
                                    : std::nullopt,
-                               request.total_cents()};
+                               request.total_cents(),
+                               request.request_id().empty()
+                                   ? std::nullopt
+                                   : std::optional<std::string>(request.request_id())};
             v1::CreateInvoiceResponse response;
             toMessage(service.create(std::move(invoice)), *response.mutable_invoice());
             return response;

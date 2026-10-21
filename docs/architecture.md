@@ -165,6 +165,14 @@ There is no ORM: SQL is explicit and lives in one place per aggregate.
 - **Optimistic locking**: every table has a `version` column. Updates use
   `UPDATE ... SET ..., version = version + 1 WHERE id = $1 AND version = $2`
   and treat zero affected rows as a concurrent modification.
+- **Idempotency**: operations that create or modify take a request ID, a UUID
+  chosen by the caller, kept with the data in the same transaction. Invoices
+  keep it in a unique `request_id` column: the store inserts with `ON
+  CONFLICT (request_id) DO NOTHING` and, when nothing was inserted, reads the
+  invoice of that key. A concurrent insert of the same key waits for the
+  first transaction to commit, so exactly one invoice is created. The service
+  returns that invoice when the request matches it and rejects the key
+  otherwise.
 - **Services** (`InvoiceService`) hold the business rules, use stores and
   throw `std::invalid_argument` for validation errors.
 
@@ -178,7 +186,8 @@ are prepared:
 - Everything runs in one transaction (PostgreSQL has transactional DDL),
   serialized between instances with `pg_advisory_xact_lock`.
 - One statement per migration; a released migration is never edited, a new one
-  is added. Table and column names are English `snake_case`; every table has a
+  is added. Until a version is released the migrations may still change, and
+  development databases are created again. Table and column names are English `snake_case`; every table has a
   `bigserial` `id` and an integer `version`.
 
 ### 4.3 RPC API (`backend/api`)
@@ -215,7 +224,15 @@ Dispatch does not depend on the transport:
 
 The sample domain is a minimal invoice: a required customer, an optional
 customer tax ID (an empty one is stored as absent) and a total in cents, which
-must be a whole number between 0 and 999 999 999 999. Numbering, dates and
+must be a whole number between 0 and 999 999 999 999.
+
+`CreateInvoice` is idempotent with a `request_id` (§4.1), whatever the
+transport: a request repeated with the same key, also at the same time,
+returns the invoice created the first time and creates no other; the key with
+different data, or a key that is not a UUID, is an `invalid_argument` error;
+without a key every request creates an invoice. The client sets a new key for
+every invoice it creates, so it can safely send the request again after a
+lost connection (§5.1). Numbering, dates and
 invoice lines are not modeled yet. Error messages are English and not
 translated yet.
 
@@ -252,6 +269,9 @@ echo 'customer: "Acme S.L." total_cents: 121000' |
        http://127.0.0.1:8090/api/guita.v1.InvoiceService/CreateInvoice |
   protoc -I src/proto --decode=guita.v1.CreateInvoiceResponse guita/v1/invoice_service.proto
 ```
+
+With `request_id: "9b2f0c1e-5d43-4a8e-b6f7-0e1d2c3b4a59"` added to that text,
+running the command twice prints the same invoice both times.
 
 ### 4.4 Backend and server
 
@@ -603,13 +623,14 @@ application's default connection string.
 | `contract_lint`, `contract_format` | `unit` | `buf lint` and `buf format` on the contract |
 | `version_check_*` | `unit` | `scripts/check-version.sh`: the `develop/` and `release/` branches of the CMake version pass, another version fails with its message, a change branch has nothing to compare |
 | `contract` | `unit` | the contract's code writes and reads the reference bytes of `tests/support/ProtoSamples.h` (worked out by hand, also checked in WebAssembly by `bench_encoding`): optional tax ID absent, empty and present, `int64` limits, negative values; round trips; fields of a later version skipped and kept; malformed bytes rejected |
-| `invoiceservice` | `unit` | invoice validation (customer, negative and too large totals) without connecting to the database |
+| `invoiceservice` | `unit` | invoice validation (customer, negative and too large totals, request IDs that are not UUIDs) without connecting to the database |
 | `authorizer` | `unit` | `tokenAuthorizer`: right, wrong, missing and malformed tokens; an empty token accepts everything |
-| `migrations` | `db` | schema from scratch, second run without changes, column types, the `CHECK` on totals |
-| `invoicestore` | `db` | exact cents ↔ `numeric(12,2)` (0.05, 1234.50, maximum), `NULL` tax ID, listing order |
+| `migrations` | `db` | schema from scratch, second run without changes, column types, the `CHECK` on totals, unique request IDs |
+| `invoicestore` | `db` | exact cents ↔ `numeric(12,2)` (0.05, 1234.50, maximum), `NULL` tax ID, listing order, nothing inserted for a used request ID and the invoice of a key read back |
+| `idempotency` | `db` | `InvoiceService` with request IDs: the same request in series and from eight threads at once creates one invoice, the key with other data is rejected, tax IDs compared once normalized, keys in any case, no key creates every time |
 | `database` | `db` | pool with more threads than connections, rollback on exceptions, fail-fast statements, backend refusing a mismatched schema |
 | `rpcrouter` | `unit` | `RpcRouter` without any transport: binary calls, fields of a later version skipped, authorization, unknown procedures, malformed messages, exceptions to codes, registrations with types of another method or package refused, concurrent calls |
-| `rpcapi` | `api` | the RPC API over HTTP in binary: both procedures, absent tax ID, unknown fields, Connect errors (400, 401, 404, 405, 415, JSON included), error bodies with quotes, control characters and non-ASCII text read with `QJsonDocument`, and an in-process `Backend` that listens on no port |
+| `rpcapi` | `api` | the RPC API over HTTP in binary: both procedures, absent tax ID, a creation repeated with its request ID, unknown fields, Connect errors (400, 401, 404, 405, 415, JSON included), error bodies with quotes, control characters and non-ASCII text read with `QJsonDocument`, and an in-process `Backend` that listens on no port |
 | `invoicerepository` | `client` | `ApiConnection` + `InvoiceRepository` with both transports (HTTP with a token, and in process against a backend that listens on no port), same results: list, create, absent tax ID, the backend's validation message, a wrong token, an unreachable backend, results dropped for destroyed callers |
 | `amount` | `qml` | `Amount.js`: typed amounts with comma or dot, limits and rejections, and their display per locale |
 

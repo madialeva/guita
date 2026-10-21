@@ -11,6 +11,9 @@ struct NewInvoice {
     std::string customer;
     std::optional<std::string> customerTaxId;
     Cents totalCents = 0;
+    // Idempotency key (a UUID): creating again with the same key returns the
+    // invoice created the first time instead of another one
+    std::optional<std::string> requestId;
 };
 
 struct Invoice {

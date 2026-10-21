@@ -69,6 +69,7 @@ guita_add_test(rpcrouter LABELS unit LIBS api contract)
 guita_add_test(migrations LABELS db LIBS core DATABASE)
 guita_add_test(invoicestore LABELS db LIBS core DATABASE)
 guita_add_test(database LABELS db LIBS api DATABASE)
+guita_add_test(idempotency LABELS db LIBS core DATABASE)
 
 # RPC API
 guita_add_test(rpcapi LABELS api LIBS api contract httplib::httplib DATABASE)

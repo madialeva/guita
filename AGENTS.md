@@ -85,6 +85,9 @@ QTP0004). Executables are written to `build/<preset>/bin`.
   request and one response message per method (`<Method>Request`,
   `<Method>Response`). Before a version is released anything may change; after
   it, incompatible changes go to a new package (`guita.v2`).
+- Every method that creates or modifies has a `string request_id` field, an
+  idempotency key (a UUID; empty means none), so a client may send it again
+  after a lost connection without applying it twice.
 - `buf lint` and `buf format` (CTest `contract_lint`, `contract_format`) keep
   the style. Every change to `src/proto` also runs `scripts/check-contract.sh`
   (`buf breaking` with the `WIRE_JSON` rules against the development branch,
@@ -113,6 +116,11 @@ QTP0004). Executables are written to `build/<preset>/bin`.
   32-bit).
 - Optimistic locking is explicit: updates check and increment `version`
   (`WHERE id = $1 AND version = $2`) and treat zero affected rows as a conflict.
+- Every operation that creates or modifies takes a `request_id` (a UUID chosen
+  by the caller) and is idempotent: the backend keeps the key with the data in
+  the same transaction as the operation (`invoices.request_id`, unique, with
+  `ON CONFLICT DO NOTHING`), returns the first result for a repeated request
+  and rejects the key with different data.
 - Procedures are registered per service on `RpcRouter`
   (`addInvoiceProcedures()`) with `add<Request, Response>()`, which checks at
   startup that the types are the method's (`<Method>Request`,
@@ -216,6 +224,7 @@ The PostgreSQL schema is owned and versioned by this project through numbered
 migrations in `src/backend/core/Migrations.cpp`, applied at startup by both the server and
 standalone mode inside one transaction guarded by `pg_advisory_xact_lock`.
 Never edit a released migration; add a new one (one statement per migration).
+Until the first release the migrations may still change.
 Table and column names are English `snake_case`; every table has a
 `bigserial` `id` and an integer `version` for optimistic locking. The contract's field names are
 English `snake_case` (lowerCamelCase in its JSON encoding); treat the contract as public once released.

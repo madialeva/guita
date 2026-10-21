@@ -9,11 +9,11 @@
 
 ## 2. Idempotencia de las creaciones
 
-- [ ] 2.1 Añadir la columna `request_id uuid UNIQUE` al `CREATE TABLE invoices` de la migración 1 y ampliar la suite `migrations` (columna, tipo, unicidad, segunda ejecución sin cambios); verificar con `ctest --preset native -R migrations`
-- [ ] 2.2 `InvoiceStore`: inserción con `ON CONFLICT (request_id) DO NOTHING RETURNING` y lectura de la factura de una clave, como sentencias preparadas registradas en `prepare()`; ampliar `invoicestore` (clave nueva, clave existente, sin clave); verificar con `ctest --preset native -L db`
-- [ ] 2.3 `InvoiceService::create()` con clave: validación del formato UUID, devolución de la factura existente si coincide y `invalid_argument` si no; ampliar `invoiceservice` (formatos válidos e inválidos, sin base de datos) y crear la suite `idempotency` (`db`: misma clave en serie, desde varios hilos a la vez y con otros datos, una sola fila); verificar con `ctest --preset native -L unit -L db`
-- [ ] 2.4 `InvoiceProcedures` pasa `request_id` al servicio; ampliar `rpcapi` con la creación repetida por HTTP (misma factura, una sola fila) y la clave no válida (400 `invalid_argument`); verificar con `ctest --preset native -L api`
-- [ ] 2.5 Documentar la idempotencia: `docs/architecture.md` (§4.1, §4.2 y §4.3), la regla de `request_id` en AGENTS.md (Contrato y Backend), la tabla de suites (§10.3) y el CHANGELOG (`Added`); verificar que la creación repetida documentada con `protoc --encode` + `curl` devuelve la misma factura
+- [x] 2.1 Añadir la columna `request_id uuid UNIQUE` al `CREATE TABLE invoices` de la migración 1 y ampliar la suite `migrations` (columna, tipo, unicidad, segunda ejecución sin cambios); verificar con `ctest --preset native -R migrations`
+- [x] 2.2 `InvoiceStore`: inserción con `ON CONFLICT (request_id) DO NOTHING RETURNING` y lectura de la factura de una clave, como sentencias preparadas registradas en `prepare()`; ampliar `invoicestore` (clave nueva, clave existente, sin clave); verificar con `ctest --preset native -L db`
+- [x] 2.3 `InvoiceService::create()` con clave: validación del formato UUID, devolución de la factura existente si coincide y `invalid_argument` si no; ampliar `invoiceservice` (formatos válidos e inválidos, sin base de datos) y crear la suite `idempotency` (`db`: misma clave en serie, desde varios hilos a la vez y con otros datos, una sola fila); verificar con `ctest --preset native -L unit -L db`
+- [x] 2.4 `InvoiceProcedures` pasa `request_id` al servicio; ampliar `rpcapi` con la creación repetida por HTTP (misma factura, una sola fila) y la clave no válida (400 `invalid_argument`); verificar con `ctest --preset native -L api`
+- [x] 2.5 Documentar la idempotencia: `docs/architecture.md` (§4.1, §4.2 y §4.3), la regla de `request_id` en AGENTS.md (Contrato y Backend), la tabla de suites (§10.3) y el CHANGELOG (`Added`); verificar que la creación repetida documentada con `protoc --encode` + `curl` devuelve la misma factura
 
 ## 3. Eventos independientes del transporte
 

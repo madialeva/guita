@@ -30,6 +30,9 @@ First version: a proof of concept of the architecture, to be released as 0.1.0.
   --encode`/`--decode` write and read its messages by hand.
 - Exact money handling: integer cents in C++ and in the API, `numeric(12,2)` in
   PostgreSQL.
+- Idempotent invoice creation: `CreateInvoice` takes an optional `request_id`
+  (a UUID), and a request repeated with the same key returns the invoice
+  created the first time instead of creating another.
 - Automatic PostgreSQL schema migrations on every start.
 - The server also serves the web client.
 - Optional shared Bearer token (`API_TOKEN`) for development.
