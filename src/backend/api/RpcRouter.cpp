@@ -19,8 +19,12 @@ RpcResult RpcRouter::call(const RpcCall &call) const {
         return {RpcCode::Unauthenticated, {}, "Unauthorized"};
 
     const auto procedure = m_procedures.find(call.procedure);
-    if (procedure == m_procedures.end())
+    if (procedure == m_procedures.end()) {
+        if (m_streams.contains(call.procedure))
+            return {RpcCode::Unimplemented, {}, "Procedure " + call.procedure +
+                    " is a stream: it is served over the persistent channel and in process"};
         return {RpcCode::Unimplemented, {}, "Unknown procedure " + call.procedure};
+    }
 
     try {
         return procedure->second(call.payload);
@@ -29,5 +33,27 @@ RpcResult RpcRouter::call(const RpcCall &call) const {
     } catch (const std::exception &e) {
         std::cerr << "error: " << call.procedure << ": " << e.what() << '\n';
         return {RpcCode::Internal, {}, "Internal error"};
+    }
+}
+
+RpcSubscription RpcRouter::subscribe(const RpcCall &call, MessageSink onMessage) const {
+    if (!m_authorizer(call.authorization))
+        return RpcSubscription(RpcResult{RpcCode::Unauthenticated, {}, "Unauthorized"});
+
+    const auto stream = m_streams.find(call.procedure);
+    if (stream == m_streams.end()) {
+        if (m_procedures.contains(call.procedure))
+            return RpcSubscription(RpcResult{RpcCode::Unimplemented, {},
+                                             "Procedure " + call.procedure + " is not a stream"});
+        return RpcSubscription(RpcResult{RpcCode::Unimplemented, {}, "Unknown procedure " + call.procedure});
+    }
+
+    try {
+        return stream->second(call.payload, std::move(onMessage));
+    } catch (const std::invalid_argument &e) {
+        return RpcSubscription(RpcResult{RpcCode::InvalidArgument, {}, e.what()});
+    } catch (const std::exception &e) {
+        std::cerr << "error: " << call.procedure << ": " << e.what() << '\n';
+        return RpcSubscription(RpcResult{RpcCode::Internal, {}, "Internal error"});
     }
 }

@@ -22,14 +22,14 @@ struct Backend::Impl {
     explicit Impl(BackendOptions o)
         : options(std::move(o)),
           db(options.connectionString, kPoolSize, prepareStatements),
-          invoices(db),
+          invoices(db, publishCreatedInvoices(invoiceEvents)),
           router(options.authorizer) {
         {
             pqxx::connection connection(options.connectionString);
             applyMigrations(connection);
         }
         db.warmUp();          // after the migrations: the statements need the schema
-        addInvoiceProcedures(router, invoices);
+        addInvoiceProcedures(router, invoices, invoiceEvents);
         if (options.http)
             setUpHttp(*options.http);
     }
@@ -54,6 +54,7 @@ struct Backend::Impl {
 
     BackendOptions  options;
     Database        db;
+    InvoiceEvents   invoiceEvents;
     InvoiceService  invoices;
     RpcRouter       router;
     httplib::Server http;
@@ -66,6 +67,10 @@ Backend::Backend(BackendOptions options) : d(std::make_unique<Impl>(std::move(op
 Backend::~Backend() { stop(); }
 
 RpcResult Backend::call(const RpcCall &call) const { return d->router.call(call); }
+
+RpcSubscription Backend::subscribe(const RpcCall &call, std::function<void(std::string)> onMessage) const {
+    return d->router.subscribe(call, std::move(onMessage));
+}
 
 bool Backend::start() {
     if (!d->options.http || d->listener.joinable()) return true;

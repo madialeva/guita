@@ -68,6 +68,15 @@ private slots:
         }
     }
 
+    void notifiesNoFailedCreation() {
+        int notified = 0;
+        InvoiceService service(m_db, [&](const Invoice &) { ++notified; });
+        QVERIFY_THROWS_EXCEPTION(std::invalid_argument, service.create({"", std::nullopt, 100}));
+        // Valid, but the database is unreachable
+        QVERIFY_THROWS_EXCEPTION(std::exception, service.create({"Acme", std::nullopt, 100}));
+        QCOMPARE(notified, 0);
+    }
+
 private:
     // Unreachable on purpose: a validation that touched the database would
     // fail with a connection error instead of std::invalid_argument

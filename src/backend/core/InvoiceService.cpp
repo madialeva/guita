@@ -3,6 +3,7 @@
 #include <cctype>
 #include <stdexcept>
 #include <string_view>
+#include <utility>
 
 namespace {
 // numeric(12,2): up to 9 999 999 999.99
@@ -37,10 +38,10 @@ Invoice InvoiceService::create(NewInvoice invoice) {
     if (invoice.requestId && !isUuid(*invoice.requestId))
         throw std::invalid_argument("request_id must be a UUID");
 
-    return m_db.inTransaction([&](pqxx::work &tx) {
+    auto [result, created] = m_db.inTransaction([&](pqxx::work &tx) {
         InvoiceStore store(tx);
         if (auto created = store.insert(invoice))
-            return *created;
+            return std::pair(std::move(*created), true);
         // The key was used before: the same request again gets the same
         // invoice, a different one is an error
         auto existing = store.byRequestId(*invoice.requestId);
@@ -48,8 +49,12 @@ Invoice InvoiceService::create(NewInvoice invoice) {
             throw std::runtime_error("Invoice of request_id " + *invoice.requestId + " not found");
         if (!sameInvoice(*existing, invoice))
             throw std::invalid_argument("request_id was already used for a different invoice");
-        return *existing;
+        return std::pair(std::move(*existing), false);
     });
+    // Committed: only now may others learn of it
+    if (created && m_onCreated)
+        m_onCreated(result);
+    return result;
 }
 
 std::vector<Invoice> InvoiceService::list() {

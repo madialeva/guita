@@ -1,6 +1,7 @@
 #pragma once
 #include <backend/api/Authorizer.h>
 #include <backend/api/RpcCall.h>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -35,6 +36,12 @@ public:
 
     // A call to a procedure of the contract, in the caller's thread. Thread-safe.
     RpcResult call(const RpcCall &call) const;
+
+    // A subscription to a stream procedure of the contract (server events):
+    // onMessage gets each encoded message in the thread that produces it (the
+    // first one possibly before subscribe() returns), and must not block.
+    // Thread-safe.
+    RpcSubscription subscribe(const RpcCall &call, std::function<void(std::string)> onMessage) const;
 
     // HTTP transport, when configured. start() does not block: the server runs
     // on its own threads. Without HTTP, start() does nothing and port() is 0.

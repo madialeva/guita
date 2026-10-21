@@ -10,6 +10,8 @@
 #include <QtTest>
 #include <cstdint>
 #include <memory>
+#include <mutex>
+#include <vector>
 #include <optional>
 #include <string>
 
@@ -117,6 +119,43 @@ private slots:
         QCOMPARE(res->status, 400);
         QCOMPARE(json(res).object().value("code").toString(), QStringLiteral("invalid_argument"));
         QCOMPARE(json(res).object().value("message").toString(), QStringLiteral("request_id must be a UUID"));
+    }
+
+    void servesNoStreamsOverHttp() {
+        const auto res = post(kWatch, "application/proto", {});
+        QVERIFY(res);
+        QCOMPARE(res->status, 404);
+        QCOMPARE(json(res).object().value("code").toString(), QStringLiteral("unimplemented"));
+        QVERIFY(json(res).object().value("message").toString().contains(QStringLiteral("is a stream")));
+    }
+
+    void deliversEventsOfHttpCreationsInProcess() {
+        // An invoice created over HTTP reaches a subscriber of the same backend
+        std::mutex mutex;
+        std::vector<v1::WatchInvoicesResponse> events;
+        const auto subscription = m_backend->subscribe({kWatch, {}, std::string("Bearer ") + kToken},
+            [&](std::string payload) {
+                v1::WatchInvoicesResponse event;
+                QVERIFY(event.ParseFromString(payload));
+                std::lock_guard lock(mutex);
+                events.push_back(event);
+            });
+        QCOMPARE(subscription.result().code, RpcCode::Ok);
+
+        const auto res = post(kCreate, "application/proto", create("Watched S.L.", 990));
+        QVERIFY(res);
+        QCOMPARE(res->status, 200);
+        v1::CreateInvoiceResponse created;
+        QVERIFY(created.ParseFromString(res->body));
+
+        // Published before the response was written
+        std::lock_guard lock(mutex);
+        QCOMPARE(events.size(), size_t(2));
+        QCOMPARE(events[0].event_case(), v1::WatchInvoicesResponse::kStarted);
+        QCOMPARE(events[1].event_case(), v1::WatchInvoicesResponse::kCreated);
+        QCOMPARE(events[1].created().id(), created.invoice().id());
+        QCOMPARE(events[1].created().customer(), std::string("Watched S.L."));
+        QCOMPARE(events[1].created().total_cents(), 990);
     }
 
     void acceptsTheConnectProtocolHeader() {
@@ -236,6 +275,7 @@ private:
     static constexpr const char *kToken = "rpc-token";
     static constexpr const char *kList = "guita.v1.InvoiceService/ListInvoices";
     static constexpr const char *kCreate = "guita.v1.InvoiceService/CreateInvoice";
+    static constexpr const char *kWatch = "guita.v1.InvoiceService/WatchInvoices";
 
     static httplib::Headers auth() { return {{"Authorization", std::string("Bearer ") + kToken}}; }
 

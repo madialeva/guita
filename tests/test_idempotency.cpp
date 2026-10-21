@@ -14,7 +14,7 @@
 
 // Idempotent creation of invoices with a request ID, through InvoiceService
 // against PostgreSQL: a repeated request, in series or at the same time, gets
-// the invoice of the first one and creates no other.
+// the invoice of the first one, creates no other and notifies no creation.
 class IdempotencyTest : public QObject {
     Q_OBJECT
 
@@ -94,6 +94,26 @@ private slots:
         const auto second = m_service->create({"Acme", std::nullopt, 100});
         QVERIFY(second.id != first.id);
         QCOMPARE(count(), 2);
+    }
+
+    void notifiesOnlyNewInvoicesOnceCommitted() {
+        std::vector<long long> notified;
+        int visible = 0;
+        pqxx::connection other(m_testDb->connectionString());
+        InvoiceService service(*m_db, [&](const Invoice &invoice) {
+            notified.push_back(invoice.id);
+            // Already committed: another connection sees it
+            pqxx::nontransaction tx(other);
+            visible += tx.query_value<int>("SELECT count(*) FROM invoices WHERE id = $1", pqxx::params{invoice.id});
+        });
+
+        const auto first = service.create({"Acme", std::nullopt, 100, kKey});
+        service.create({"Acme", std::nullopt, 100, kKey});
+        QVERIFY_THROWS_EXCEPTION(std::invalid_argument, service.create({"Acme", std::nullopt, 200, kKey}));
+        const auto unkeyed = service.create({"Acme", std::nullopt, 100});
+
+        QCOMPARE(notified, (std::vector<long long>{first.id, unkeyed.id}));
+        QCOMPARE(visible, 2);
     }
 
     void cleanupTestCase() {

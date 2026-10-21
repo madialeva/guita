@@ -208,7 +208,28 @@ Dispatch does not depend on the transport:
   their types against the method, `guita.v1.CreateInvoiceRequest` and
   `guita.v1.CreateInvoiceResponse` (the convention `buf lint` enforces), and
   fails at startup with types of another method or package. Once registered,
-  `call()` is thread-safe.
+  `call()` and `subscribe()` are thread-safe.
+- **Stream procedures** carry server events. They are registered with
+  `addStream<Request, Response>()`, whose handler gets the request and a
+  function that sends one response message, and returns the handle of its
+  subscription. `subscribe(RpcCall, onMessage)` checks the authorization and
+  decodes the request like `call()`, and returns an `RpcSubscription`: an
+  error, or a move-only handle that delivers the encoded messages to
+  `onMessage`, in the thread that produces them, until it is released.
+  `call()` of a stream procedure, or `subscribe()` to a unary one, answers
+  `unimplemented`.
+- **Events** are published on an `EventTopic<Message>`: every subscriber gets
+  each message in the publisher's thread, in order, and is never called
+  again once its handle is released. Subscribers must not block: they only
+  queue the message for their transport. `InvoiceService` knows nothing of the
+  contract: it takes a plain notification, called with each new invoice once
+  its transaction is committed (never for a repeated request nor a failed
+  one), which `publishCreatedInvoices()` turns into a `created` event.
+  `WatchInvoices` subscribes to that topic and sends `started` first, under
+  the topic's lock, so no invoice can arrive before it. Events reach the
+  subscribers of the same process whatever transport created the invoice;
+  they are delivered at most once, and those produced while a subscriber is
+  disconnected are lost: `started` tells it to reload what it shows.
 - **`InvoiceProcedures`** registers `guita.v1.InvoiceService` and converts
   between the contract's messages and the domain structs of `core`, which
   knows nothing of the contract.
@@ -248,7 +269,7 @@ translated yet.
 - Errors are Connect errors, `{"code": "...", "message": "..."}` as JSON (as
   Connect defines them for any codec, written by `connectErrorBody()`), with
   these statuses: `invalid_argument` 400, `unauthenticated` 401,
-  `unimplemented` 404 (unknown procedure) or 415 (content type), `internal`
+  `unimplemented` 404 (unknown or stream procedure) or 415 (content type), `internal`
   500; other HTTP methods on a procedure get `405` with `Allow: POST`.
 - Responses are compressed with gzip when the client accepts it (cpp-httplib is
   built with zlib); request bodies are limited to 16 MiB.
@@ -281,11 +302,14 @@ It is configured with `BackendOptions`: connection string, authorizer and
 optional `HttpOptions` (address, port, docroot, access log). Its constructor
 applies the migrations, prepares the statements and registers the procedures,
 and throws on failure. `call()` runs a procedure in the caller's thread;
+`subscribe()` opens a subscription to a stream procedure, whose messages
+arrive in the thread that produces them (the first one possibly before
+`subscribe()` returns);
 `start()` binds the port and runs the HTTP server on its own thread pool
 without blocking (with port `0` the OS picks a free port, returned by
 `port()`). Without `HttpOptions` nothing listens on the network.
 
-`Backend.h` exposes only `RpcCall`, `RpcResult` and standard types, and
+`Backend.h` exposes only `RpcCall`, `RpcResult`, `RpcSubscription` and standard types, and
 includes neither cpp-httplib, libpqxx nor protobuf (pimpl), so the client only
 sees that small interface.
 
@@ -623,14 +647,14 @@ application's default connection string.
 | `contract_lint`, `contract_format` | `unit` | `buf lint` and `buf format` on the contract |
 | `version_check_*` | `unit` | `scripts/check-version.sh`: the `develop/` and `release/` branches of the CMake version pass, another version fails with its message, a change branch has nothing to compare |
 | `contract` | `unit` | the contract's code writes and reads the reference bytes of `tests/support/ProtoSamples.h` (worked out by hand, also checked in WebAssembly by `bench_encoding`): optional tax ID absent, empty and present, `int64` limits, negative values; round trips; fields of a later version skipped and kept; malformed bytes rejected |
-| `invoiceservice` | `unit` | invoice validation (customer, negative and too large totals, request IDs that are not UUIDs) without connecting to the database |
+| `invoiceservice` | `unit` | invoice validation (customer, negative and too large totals, request IDs that are not UUIDs) without connecting to the database, and no creation notified when it fails |
 | `authorizer` | `unit` | `tokenAuthorizer`: right, wrong, missing and malformed tokens; an empty token accepts everything |
 | `migrations` | `db` | schema from scratch, second run without changes, column types, the `CHECK` on totals, unique request IDs |
 | `invoicestore` | `db` | exact cents ↔ `numeric(12,2)` (0.05, 1234.50, maximum), `NULL` tax ID, listing order, nothing inserted for a used request ID and the invoice of a key read back |
-| `idempotency` | `db` | `InvoiceService` with request IDs: the same request in series and from eight threads at once creates one invoice, the key with other data is rejected, tax IDs compared once normalized, keys in any case, no key creates every time |
+| `idempotency` | `db` | `InvoiceService` with request IDs: the same request in series and from eight threads at once creates one invoice, the key with other data is rejected, tax IDs compared once normalized, keys in any case, no key creates every time; only new invoices are notified, once committed |
 | `database` | `db` | pool with more threads than connections, rollback on exceptions, fail-fast statements, backend refusing a mismatched schema |
-| `rpcrouter` | `unit` | `RpcRouter` without any transport: binary calls, fields of a later version skipped, authorization, unknown procedures, malformed messages, exceptions to codes, registrations with types of another method or package refused, concurrent calls |
-| `rpcapi` | `api` | the RPC API over HTTP in binary: both procedures, absent tax ID, a creation repeated with its request ID, unknown fields, Connect errors (400, 401, 404, 405, 415, JSON included), error bodies with quotes, control characters and non-ASCII text read with `QJsonDocument`, and an in-process `Backend` that listens on no port |
+| `rpcrouter` | `unit` | `RpcRouter` without any transport: binary calls, fields of a later version skipped, authorization, unknown procedures, malformed messages, exceptions to codes, registrations with types of another method or package refused, concurrent calls; stream procedures (messages in order, end on release, authorization, unary and stream kept apart); `EventTopic` (greeting first while publishing, no call after release from concurrent threads, failing subscribers) |
+| `rpcapi` | `api` | the RPC API over HTTP in binary: both procedures, absent tax ID, a creation repeated with its request ID, `WatchInvoices` refused over HTTP, an invoice created over HTTP reaching an in-process subscriber, unknown fields, Connect errors (400, 401, 404, 405, 415, JSON included), error bodies with quotes, control characters and non-ASCII text read with `QJsonDocument`, and an in-process `Backend` that listens on no port |
 | `invoicerepository` | `client` | `ApiConnection` + `InvoiceRepository` with both transports (HTTP with a token, and in process against a backend that listens on no port), same results: list, create, absent tax ID, the backend's validation message, a wrong token, an unreachable backend, results dropped for destroyed callers |
 | `amount` | `qml` | `Amount.js`: typed amounts with comma or dot, limits and rejections, and their display per locale |
 
