@@ -1,8 +1,11 @@
 # The client-backend contract, generated once by protoc for both sides:
-#   contract  protoc's C++ (guita::v1, no Qt), native and WASM, used by the
-#             backend and the client
-# Generated headers are included as <guita/v1/...>.
-set(GUITA_PROTO_FILES ${CMAKE_CURRENT_SOURCE_DIR}/guita/v1/invoice_service.proto)
+#   contract  protoc's C++ (no Qt), native and WASM, used by the backend and
+#             the client: the API (guita::v1) and the frames of the persistent
+#             channel (guita::channel::v1)
+# Generated headers are included as <guita/v1/...> and <guita/channel/v1/...>.
+set(GUITA_PROTO_FILES
+    ${CMAKE_CURRENT_SOURCE_DIR}/guita/v1/invoice_service.proto
+    ${CMAKE_CURRENT_SOURCE_DIR}/guita/channel/v1/channel.proto)
 
 find_package(protobuf REQUIRED CONFIG)
 # The WebAssembly build of protobuf has no protoc: the host's generates the code

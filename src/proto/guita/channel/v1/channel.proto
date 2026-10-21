@@ -1,0 +1,85 @@
+// Frames of the persistent channel between the Guita client and backend: one
+// binary WebSocket message is one frame. The channel carries calls to the
+// procedures of the contract by their full name ("guita.v1.InvoiceService/
+// CreateInvoice"), so it does not depend on the API's package and version.
+// The contract's evolution rules apply here as well.
+syntax = "proto3";
+
+package guita.channel.v1;
+
+option optimize_for = LITE_RUNTIME;
+
+// A frame from the client.
+message ClientFrame {
+  oneof frame {
+    // First frame of a connection, and only once.
+    Hello hello = 1;
+    Call call = 2;
+    // Ends a subscription.
+    Cancel cancel = 3;
+  }
+}
+
+// Authenticates the connection: browsers cannot set headers on a WebSocket
+// handshake.
+message Hello {
+  // As in an Authorization header: "Bearer <token>".
+  string authorization = 1;
+}
+
+// A call to a procedure: unary, answered by one Reply, or a stream, which
+// opens a subscription answered by StreamMessages.
+message Call {
+  // Chosen by the client, unique among its calls in flight on the connection.
+  uint64 correlation_id = 1;
+  // "guita.v1.InvoiceService/CreateInvoice".
+  string procedure = 2;
+  // The encoded request message.
+  bytes payload = 3;
+}
+
+message Cancel {
+  // The correlation ID of the subscription's call.
+  uint64 correlation_id = 1;
+}
+
+// A frame from the server.
+message ServerFrame {
+  oneof frame {
+    // The Hello was accepted.
+    Welcome welcome = 1;
+    // The response of a unary call, or the end of a subscription with an error.
+    Reply reply = 2;
+    // A message of a subscription.
+    StreamMessage message = 3;
+    // The server is about to close the connection, and why.
+    Goodbye goodbye = 4;
+  }
+}
+
+message Welcome {}
+
+message Reply {
+  uint64 correlation_id = 1;
+  oneof result {
+    // The encoded response message.
+    bytes payload = 2;
+    CallError error = 3;
+  }
+}
+
+message StreamMessage {
+  uint64 correlation_id = 1;
+  // The encoded response message of the stream.
+  bytes payload = 2;
+}
+
+// An error, as in Connect: "invalid_argument", "unauthenticated", ...
+message CallError {
+  string code = 1;
+  string message = 2;
+}
+
+message Goodbye {
+  CallError error = 1;
+}
