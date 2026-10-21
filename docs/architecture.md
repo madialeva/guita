@@ -412,7 +412,11 @@ larger than Protobuf (17 to 23 % compressed), faster than Qt Protobuf but 8
 to 10 times slower than protoc's code to encode, and was dropped.
 
 **Round trip of a small call per transport** (`bench_latency`, loopback, a
-stub procedure without database, so only the transport is measured):
+stub procedure without database, so only the transport is measured). The
+persistent channel is measured whole, with the envelope, the session, the
+worker pool and the writer thread of `WebSocketRpcTransport`, both with
+cpp-httplib's client and with the client's own `WebSocketTransport` in a Qt
+event loop:
 
 | Transport | p50 | p90 | p99 |
 |---|---|---|---|
@@ -421,12 +425,17 @@ stub procedure without database, so only the transport is measured):
 | HTTP `POST`, keep-alive, empty body | 36 µs | 44 µs | 104 µs |
 | HTTP `POST`, keep-alive, 8-byte body | 41 µs | 52 µs | 107 µs |
 | WebSocket frame, same bytes as the empty body | 41 µs | 48 µs | 60 µs |
+| Persistent channel, cpp-httplib client | 56 µs | 61 µs | 74 µs |
+| Persistent channel, `WebSocketTransport` (Qt) | 53 µs | 60 µs | 71 µs |
 
 **Size of `client.wasm`**: 27 725 237 bytes before the contract, 27 941 331
 with Qt Protobuf (+211 KiB), 28 886 336 with protoc's code on the full
 `libprotobuf` (0.9 MiB more, measured while making this change) and 27 938 849 on
 `libprotobuf-lite`: 2.4 KiB less than with Qt Protobuf, 0.8 % over no
-contract at all.
+contract at all. With the persistent channel it is 28 060 716 bytes: Qt
+WebSockets and `WebSocketTransport` instead of `QNetworkAccessManager` and the
+former HTTP transport, and the channel's frames in the contract, add 119 KiB
+(0.4 %).
 
 Reading:
 
@@ -444,12 +453,16 @@ Reading:
 - With cpp-httplib's client, a request with a body costs about 5 µs more than
   one without, whatever its encoding: headers and body are written apart.
 - With cpp-httplib, a WebSocket frame is not faster than an HTTP request with
-  keep-alive for request/response. The case for the planned persistent channel
-  is server push and multiplexing, not the latency of one call, and an event
-  loop server can be evaluated for it.
+  keep-alive for request/response. The persistent channel exists for server
+  events and one long-lived connection, not for the latency of one call: it
+  costs about 15 µs more than a bare frame, the two thread hops that let
+  several calls run at once and keep producers from waiting for the socket
+  (to the worker pool and to the writer thread). A real call adds the
+  database time, hundreds of microseconds, either way.
 - Small request/response exchanges need `TCP_NODELAY`: without it, Nagle's
   algorithm and delayed ACKs made each WebSocket round trip take about 82 ms.
-  The backend enables it on its HTTP server.
+  The backend enables it on its HTTP server, which covers the channel; the Qt
+  client needs nothing more, as its round trip above shows.
 
 ## 5. Client
 
@@ -815,6 +828,10 @@ created after the first run, and the job keeps its name.
 - **User authentication** owned by the backend (§7).
 - **Desktop packaging** (§9.2).
 - **Translated backend error messages**.
+- **An event-loop server for the persistent channel** (Boost.Beast/Asio,
+  uWebSockets or libwebsockets), should a server need many more simultaneous
+  channels than threads: cpp-httplib holds three threads per open channel
+  (§12). Only `WebSocketRpcTransport` would change.
 
 ## 12. Considerations
 

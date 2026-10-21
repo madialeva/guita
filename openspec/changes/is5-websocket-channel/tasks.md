@@ -83,8 +83,8 @@
 
 ## 7. Medición
 
-- [ ] 7.1 Añadir a `tests/bench/latency_bench.cpp` el canal real (`WebSocketRpcTransport` + `RpcRouter` con el procedimiento sin base de datos) con `ws::WebSocketClient` y el sobre, y con `WebSocketTransport` de Qt; verificar que da resultados estables entre dos ejecuciones y que ninguna ida y vuelta del cliente Qt se acerca a los 40 ms (si lo hace, activar `TCP_NODELAY` en el cliente y repetir)
-- [ ] 7.2 Medir el tamaño de `client.wasm` antes y después del cambio; documentar en `docs/architecture.md` §4.5 las filas nuevas, el tamaño y la lectura, y en §11 el servidor de bucle de eventos como trabajo pendiente; verificar que las órdenes de §4.5 funcionan tal cual
+- [x] 7.1 Añadir a `tests/bench/latency_bench.cpp` el canal real (`WebSocketRpcTransport` + `RpcRouter` con el procedimiento sin base de datos) con `ws::WebSocketClient` y el sobre, y con `WebSocketTransport` de Qt; verificar que da resultados estables entre dos ejecuciones y que ninguna ida y vuelta del cliente Qt se acerca a los 40 ms (si lo hace, activar `TCP_NODELAY` en el cliente y repetir)
+- [x] 7.2 Medir el tamaño de `client.wasm` antes y después del cambio; documentar en `docs/architecture.md` §4.5 las filas nuevas, el tamaño y la lectura, y en §11 el servidor de bucle de eventos como trabajo pendiente; verificar que las órdenes de §4.5 funcionan tal cual
 
 ## 8. Integración
 

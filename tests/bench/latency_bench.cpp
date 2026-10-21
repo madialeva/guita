@@ -1,11 +1,15 @@
 #include <backend/api/HttpRpcTransport.h>
 #include <backend/api/RpcRouter.h>
+#include <backend/api/WebSocketRpcTransport.h>
+#include <client/WebSocketTransport.h>
+#include <guita/channel/v1/channel.pb.h>
 #include <guita/v1/invoice_service.pb.h>
 #include <httplib.h>
 #include <QCoreApplication>
 #include <QEventLoop>
 #include <QThreadPool>
 #include <algorithm>
+#include <cstdint>
 #include <chrono>
 #include <cstdio>
 #include <functional>
@@ -17,9 +21,12 @@
 // same router and a stub procedure (no database, so the transport's cost is
 // what is measured): the router called directly, an in-process call with the
 // pool hop and the event-queue return that InProcTransport uses, a POST with
-// keep-alive (with an empty body and with a small one), and a WebSocket frame
-// carrying the same bytes.
+// keep-alive (with an empty body and with a small one), a WebSocket frame
+// carrying the same bytes, and the persistent channel (envelope, session,
+// worker pool and writer thread) with cpp-httplib's client and with the
+// client's WebSocketTransport.
 namespace v1 = guita::v1;
+namespace channel = guita::channel::v1;
 using Clock = std::chrono::steady_clock;
 
 namespace {
@@ -87,6 +94,8 @@ int main(int argc, char *argv[]) {
     httplib::Server server;
     server.set_tcp_nodelay(true);
     addRpcRoutes(server, router);
+    WebSocketRpcTransport channels(router, tokenAuthorizer(""));
+    channels.addRoute(server);
     server.WebSocket("/ws", [&router](const httplib::Request &, httplib::ws::WebSocket &socket) {
         std::string message;
         while (socket.read(message) != httplib::ws::ReadResult::Fail) {
@@ -132,7 +141,54 @@ int main(int argc, char *argv[]) {
         }));
         client.close();
     }
+    {
+        httplib::ws::WebSocketClient client("ws://127.0.0.1:" + std::to_string(port) + "/api/channel");
+        client.set_tcp_nodelay(true);
+        channel::ClientFrame hello;
+        hello.mutable_hello();
+        std::string reply;
+        if (!client.connect() || !client.send(hello.SerializeAsString().data(), hello.ByteSizeLong())
+            || client.read(reply) != httplib::ws::Binary) {
+            std::fprintf(stderr, "channel connection failed\n");
+            return 1;
+        }
+        std::uint64_t id = 0;
+        report("channel, cpp-httplib client", measure("channel, cpp-httplib client", 20000, [&] {
+            channel::ClientFrame frame;
+            frame.mutable_call()->set_correlation_id(++id);
+            frame.mutable_call()->set_procedure(kProcedure);
+            frame.mutable_call()->set_payload(request);
+            const auto bytes = frame.SerializeAsString();
+            client.send(bytes.data(), bytes.size());
+            client.read(reply);
+            channel::ServerFrame answer;
+            (void)answer.ParseFromString(reply);
+        }));
+        client.close();
+    }
+    {
+        // What the client pays: frames, correlation and the event loop
+        WebSocketTransport transport(QUrl(QStringLiteral("ws://127.0.0.1:%1/api/channel").arg(port)), {});
+        QObject context;
+        const auto encoded = QByteArray::fromStdString(request);
+        const auto callOnce = [&] {
+            QEventLoop loop;
+            bool ok = false;
+            transport.call(kProcedure, encoded, &context, [&](const ApiTransport::Reply &reply) {
+                ok = reply.ok;
+                loop.quit();
+            }, ApiTransport::Repeat::Safe);
+            loop.exec();
+            return ok;
+        };
+        if (!callOnce()) {
+            std::fprintf(stderr, "WebSocketTransport call failed\n");
+            return 1;
+        }
+        report("channel, WebSocketTransport", measure("channel, WebSocketTransport", 20000, [&] { (void)callOnce(); }));
+    }
 
+    channels.closeAll();
     server.stop();
     listener.join();
     return 0;
