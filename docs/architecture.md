@@ -40,7 +40,8 @@ Principles:
                 ┌──────────────▼───────────────┐
                 │  backend/api                 │
                 │  RpcRouter (procedures)      │
-                │  transports: HTTP, in proc.  │
+                │  transports: HTTP, channel,  │
+                │  in process                  │
                 └──────────────┬───────────────┘
                                │
                 ┌──────────────▼───────────────┐
@@ -233,9 +234,10 @@ Dispatch does not depend on the transport:
 - **`InvoiceProcedures`** registers `guita.v1.InvoiceService` and converts
   between the contract's messages and the domain structs of `core`, which
   knows nothing of the contract.
-- **Transports** adapt their own framing to `RpcCall`: `HttpRpcTransport` for
-  the server, `Backend::call()` for in-process calls of the standalone client
-  (§6), and later a persistent WebSocket channel.
+- **Transports** adapt their own framing to `RpcCall`: `HttpRpcTransport` and
+  `WebSocketRpcTransport` (the persistent channel) for the server, and
+  `Backend::call()` and `Backend::subscribe()` for in-process calls of the
+  standalone client (§6).
 
 | Procedure | Request | Response |
 |---|---|---|
@@ -294,12 +296,55 @@ echo 'customer: "Acme S.L." total_cents: 121000' |
 With `request_id: "9b2f0c1e-5d43-4a8e-b6f7-0e1d2c3b4a59"` added to that text,
 running the command twice prints the same invoice both times.
 
+**Over the persistent channel** (`WebSocketRpcTransport`), a WebSocket at
+`/api/channel` on the same port, which carries calls and events over one
+long-lived connection:
+
+- One binary message is one frame of `guita.channel.v1` (§3): the client
+  sends `ClientFrame`s (`hello`, `call`, `cancel`) and the server answers with
+  `ServerFrame`s (`welcome`, `reply`, `message`, `goodbye`).
+- The first frame must be a `hello` with the authorization, as in the HTTP
+  header (`Bearer <token>`): browsers cannot set headers on a WebSocket
+  handshake. The server checks it with the same `Authorizer` and answers
+  `welcome`; a wrong token gets a `goodbye` with `unauthenticated`, and any
+  other first frame a `goodbye` with `invalid_argument`, before the
+  connection is closed (1008, 1002). A connection that sends no `hello` in 10
+  seconds is closed.
+- A `call` carries a correlation ID chosen by the client, unique among its
+  calls in flight, the full name of the procedure and the encoded request.
+  Unary calls run on a worker pool shared by all channels, several at once
+  per channel, and their `reply` (the response, or an error with its Connect
+  code and message, the same as over HTTP) carries the call's ID and goes
+  out as soon as the call finishes, whatever the order of the calls. An ID
+  already in flight is answered with `invalid_argument`. After 64 unary
+  calls in flight the channel stops reading until one finishes, so TCP slows
+  the client down.
+- A `call` to a stream procedure opens a subscription: each of its messages
+  goes out as a `message` with the call's ID, until a `cancel` with that ID
+  or the end of the connection. An error opening it is a `reply`.
+- Text messages, undecodable frames or a second `hello` close the
+  connection (1003, 1002) after a `goodbye`. Frames over 16 MiB are refused,
+  as HTTP bodies are.
+- Each channel reads in a thread of the HTTP server and writes from a thread
+  of its own, which sends the queue of outgoing frames: whoever produces a
+  reply or an event only queues it. A client that does not read and leaves
+  more than 1 MiB queued is closed (1008), without holding the producer nor
+  the other channels.
+- At most `WS_MAX_CHANNELS` channels are open at once (64 by default); one
+  more is closed at once with 1013 (*Try Again Later*). The server's thread
+  pool gets one more thread per channel, so HTTP, and with it the web
+  client's files, always has threads of its own.
+- cpp-httplib pings every channel every 30 seconds and closes it after two
+  unanswered pings. `Backend::stop()` closes the open channels (1001) before
+  stopping the server, so it does not wait for their clients.
+
 ### 4.4 Backend and server
 
 `Backend` assembles database, services, the RPC router and, optionally, the
-HTTP transport, and is shared by the `server` executable and standalone mode.
-It is configured with `BackendOptions`: connection string, authorizer and
-optional `HttpOptions` (address, port, docroot, access log). Its constructor
+network transports (HTTP and the persistent channel), and is shared by the
+`server` executable and standalone mode. It is configured with
+`BackendOptions`: connection string, authorizer and optional `HttpOptions`
+(address, port, docroot, access log, maximum of channels). Its constructor
 applies the migrations, prepares the statements and registers the procedures,
 and throws on failure. `call()` runs a procedure in the caller's thread;
 `subscribe()` opens a subscription to a stream procedure, whose messages
@@ -324,10 +369,8 @@ It is configured through environment variables:
 | `HTTP_ADDRESS` | `0.0.0.0` | listen address |
 | `HTTP_PORT` | `8090` | port |
 | `DOCROOT` | `./web` | static files (WASM build) |
+| `WS_MAX_CHANNELS` | `64` | persistent channels open at once |
 | `API_TOKEN` | empty | required Bearer token; empty accepts everything (development only) |
-
-cpp-httplib also supports WebSockets (`Server::WebSocket()`), a candidate for
-the planned persistent channel (§11).
 
 ### 4.5 Measurements
 
@@ -494,7 +537,9 @@ difference).
 Authentication is pluggable rather than tied to an identity provider:
 
 - **Backend**: an `Authorizer` (`backend/api/Authorizer.h`) receives the
-  `Authorization` header of every request and decides whether to accept it.
+  `Authorization` header of every HTTP request, and the authorization of the
+  `hello` that opens every persistent channel, and decides whether to accept
+  it.
   `tokenAuthorizer()` implements the current shared-token check; validating
   tokens from any identity provider (for example JWTs from an OIDC server) is
   just another `Authorizer`, with no changes elsewhere.
@@ -568,10 +613,19 @@ mode self-contained, without external services.
                      client.wasm, qtloader.js
 ```
 
-The same server serves the static files and the API. A reverse proxy in front
+The same server serves the static files, the API and the persistent
+channel. There is a single server, without horizontal scaling: server events
+are produced and delivered within its process (§4.3). A reverse proxy in front
 terminates TLS (and can speak HTTP/2 to browsers), for example HAProxy:
 
 ```
+defaults
+    mode http
+    timeout client 30s
+    timeout server 30s
+    # Open WebSockets: longer than the server's 30-second ping
+    timeout tunnel 1h
+
 frontend https
     bind :443 ssl crt /etc/haproxy/certs/guita.pem
     default_backend guita
@@ -579,6 +633,10 @@ frontend https
 backend guita
     server guita1 127.0.0.1:8090 check
 ```
+
+HAProxy passes the WebSocket upgrade of `/api/channel` through in HTTP mode
+(`wss://` outside, `ws://` to the server); once upgraded, `timeout tunnel`
+applies, and the server's pings keep an idle channel open.
 
 COOP/COEP headers (`Cross-Origin-Opener-Policy: same-origin`,
 `Cross-Origin-Embedder-Policy: require-corp`) are needed only if the client is
@@ -654,6 +712,7 @@ application's default connection string.
 | `idempotency` | `db` | `InvoiceService` with request IDs: the same request in series and from eight threads at once creates one invoice, the key with other data is rejected, tax IDs compared once normalized, keys in any case, no key creates every time; only new invoices are notified, once committed |
 | `database` | `db` | pool with more threads than connections, rollback on exceptions, fail-fast statements, backend refusing a mismatched schema |
 | `rpcrouter` | `unit` | `RpcRouter` without any transport: binary calls, fields of a later version skipped, authorization, unknown procedures, malformed messages, exceptions to codes, registrations with types of another method or package refused, concurrent calls; stream procedures (messages in order, end on release, authorization, unary and stream kept apart); `EventTopic` (greeting first while publishing, no call after release from concurrent threads, failing subscribers) |
+| `channel` | `api` | the persistent channel with cpp-httplib's WebSocket client and the contract's frames, on a `Backend` and on stub procedures: hello accepted, wrong or missing token, a first frame that is no hello and no hello at all; calls and errors as over HTTP; concurrent calls answered as they finish and a correlation ID in use; events of another channel and cancellation; text and undecodable frames and a second hello; the limit of channels with HTTP still served; a client that does not read closed without holding the publisher; `Backend::stop()` with open channels in under a second |
 | `rpcapi` | `api` | the RPC API over HTTP in binary: both procedures, absent tax ID, a creation repeated with its request ID, `WatchInvoices` refused over HTTP, an invoice created over HTTP reaching an in-process subscriber, unknown fields, Connect errors (400, 401, 404, 405, 415, JSON included), error bodies with quotes, control characters and non-ASCII text read with `QJsonDocument`, and an in-process `Backend` that listens on no port |
 | `invoicerepository` | `client` | `ApiConnection` + `InvoiceRepository` with both transports (HTTP with a token, and in process against a backend that listens on no port), same results: list, create, absent tax ID, the backend's validation message, a wrong token, an unreachable backend, results dropped for destroyed callers |
 | `amount` | `qml` | `Amount.js`: typed amounts with comma or dot, limits and rejections, and their display per locale |
@@ -730,7 +789,12 @@ created after the first run, and the job keeps its name.
   - Avoid Qt modules available only under the GPL or commercially, which would
     impose the GPL on distributed builds.
 - **Concurrency:** the HTTP server handles requests in parallel on a thread
-  pool (one thread per connection, also for WebSockets), which suits business
-  applications but not tens of thousands of simultaneous connections. Services
-  stay thread-safe through the connection pool and one transaction per call.
+  pool, one thread per connection. A persistent channel holds three threads
+  while open: the server's thread that reads, cpp-httplib's ping thread and
+  its writer. That suits business applications, with tens or hundreds of
+  users on one server, but not tens of thousands of simultaneous connections;
+  hence the limit of channels, and the pool sized so that HTTP keeps its own
+  threads. An event-loop server would remove the limit (§11) and only touch
+  `WebSocketRpcTransport`. Services stay thread-safe through the connection
+  pool and one transaction per call.
 - **Standalone security:** in-process calls only: no listening socket at all.

@@ -126,9 +126,10 @@ message Goodbye { CallError error = 1; }
 
 ### 6. Servidor: `WebSocketRpcTransport` sobre cpp-httplib
 
-`addChannelRoute(httplib::Server &, const RpcRouter &, ChannelOptions)` en `backend/api/WebSocketRpcTransport.{h,cpp}`, registrado por `Backend` junto a las rutas HTTP. Cada conexión es una sesión:
+La clase `WebSocketRpcTransport` (`backend/api/WebSocketRpcTransport.{h,cpp}`), creada por `Backend` con el router, el `Authorizer` y unas `ChannelOptions`, registra la ruta con `addRoute(httplib::Server &)` junto a las rutas HTTP y lleva el registro de sesiones para `closeAll()`. Cada conexión es una sesión:
 
-- **Saludo**: `set_read_timeout(10 s)` hasta el `Hello`; luego sin límite (el *ping* de cpp-httplib vigila la conexión). Con un saludo aceptado (el `Authorizer` de siempre) envía `Welcome` y guarda la autorización, que acompaña a cada `RpcCall`; el router la vuelve a comprobar, así que no cambia. En cualquier otro caso envía `Goodbye` con `unauthenticated` y cierra con el código 1008.
+- **Lectura con plazo corto**: cerrar un WebSocket de cpp-httplib desde otro hilo no despierta un `read()` bloqueado (comprobado en su código), así que el lector lee con un plazo de 250 ms y vuelve a mirar si la sesión se cierra. Con ese plazo deja de actuar el de reserva de cpp-httplib (300 s), y es el *ping* el que descarta clientes muertos: el servidor cierra un canal tras dos *pings* sin respuesta (`set_websocket_max_missed_pongs(2)`).
+- **Saludo**: hasta 10 s para el `Hello`. Con un saludo aceptado (el `Authorizer` de siempre) envía `Welcome` y guarda la autorización, que acompaña a cada `RpcCall`; el router la vuelve a comprobar, así que no cambia. En cualquier otro caso envía `Goodbye` con `unauthenticated` y cierra con el código 1008.
 - **Lectura**:
   - el hilo del pool de cpp-httplib lee frames;
   - un `Call` unario se encarga a un pool de trabajo compartido por todos los canales (`httplib::ThreadPool`, tantos hilos como conexiones del pool de la base de datos);

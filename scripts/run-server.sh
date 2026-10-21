@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Starts the server (API + static files of the WASM build in build/web).
-# Variables with defaults: DB_CONN, HTTP_ADDRESS, HTTP_PORT, DOCROOT, API_TOKEN.
+# Variables with defaults: DB_CONN, HTTP_ADDRESS, HTTP_PORT, DOCROOT, WS_MAX_CHANNELS, API_TOKEN.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 

@@ -1,5 +1,6 @@
 #include <backend/api/Backend.h>
 #include <csignal>
+#include <cstddef>
 #include <cstdlib>
 #include <exception>
 #include <iostream>
@@ -18,6 +19,7 @@ std::string env(const char *name, const std::string &fallback = {}) {
 //   HTTP_ADDRESS  listen address           (0.0.0.0)
 //   HTTP_PORT     port                     (8090)
 //   DOCROOT       static files (WASM build) (./web)
+//   WS_MAX_CHANNELS  persistent channels open at once (64)
 //   API_TOKEN     required Bearer token; empty = no authentication (development only)
 //                 (development aid until user authentication exists)
 int main() {
@@ -42,6 +44,7 @@ int main() {
                 .port = std::stoi(env("HTTP_PORT", "8090")),
                 .docroot = env("DOCROOT", "./web"),
                 .accessLog = true,
+                .maxChannels = static_cast<std::size_t>(std::stoul(env("WS_MAX_CHANNELS", "64"))),
             },
         });
 

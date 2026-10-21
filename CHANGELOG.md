@@ -30,6 +30,13 @@ First version: a proof of concept of the architecture, to be released as 0.1.0.
   --encode`/`--decode` write and read its messages by hand.
 - Exact money handling: integer cents in C++ and in the API, `numeric(12,2)` in
   PostgreSQL.
+- Persistent channel over WebSocket at `/api/channel`: calls to the
+  procedures of the contract and server events over one long-lived
+  connection, authenticated in its first message, with several calls in
+  flight at once. `WS_MAX_CHANNELS` limits the channels open at once (64 by
+  default).
+- Server events: `InvoiceService.WatchInvoices` announces every invoice
+  created, whoever creates it, over the channel and in process.
 - Idempotent invoice creation: `CreateInvoice` takes an optional `request_id`
   (a UUID), and a request repeated with the same key returns the invoice
   created the first time instead of creating another.

@@ -24,9 +24,9 @@
 
 ## 4. Canal en el servidor
 
-- [ ] 4.1 Crear `backend/api/WebSocketRpcTransport.{h,cpp}` con `addChannelRoute()`: sesiones con saludo y plazo de 10 s, despacho de llamadas unarias en un pool de trabajo compartido con un máximo de 64 en vuelo por canal, suscripciones por identificador y `Cancel`, cola de salida acotada a 1 MiB con hilo escritor, y errores de protocolo con sus códigos de cierre; registrarlo desde `Backend` en `/api/channel`; verificar que `server` compila y que un cliente `ws::WebSocketClient` saluda y lista facturas
-- [ ] 4.2 Límite de canales (`HttpOptions::maxChannels`, `WS_MAX_CHANNELS` en `server`, por defecto 64) con el pool de cpp-httplib dimensionado con `new_task_queue`, y cierre de todas las sesiones en `Backend::stop()` antes de `Server::stop()`; verificar que `server` arranca con la variable y se detiene con `SIGTERM` con canales abiertos sin esperar
-- [ ] 4.3 Crear la suite `channel` (`api`, `DATABASE`) con `ws::WebSocketClient` y los frames del contrato, y un `RpcRouter` con procedimientos de prueba lentos y rápidos. Debe cubrir:
+- [x] 4.1 Crear `backend/api/WebSocketRpcTransport.{h,cpp}` (clase `WebSocketRpcTransport` con `addRoute()` y `closeAll()`): sesiones con saludo y plazo de 10 s, despacho de llamadas unarias en un pool de trabajo compartido con un máximo de 64 en vuelo por canal, suscripciones por identificador y `Cancel`, cola de salida acotada a 1 MiB con hilo escritor, y errores de protocolo con sus códigos de cierre; registrarlo desde `Backend` en `/api/channel`; verificar que `server` compila y que un cliente `ws::WebSocketClient` saluda y lista facturas
+- [x] 4.2 Límite de canales (`HttpOptions::maxChannels`, `WS_MAX_CHANNELS` en `server`, por defecto 64) con el pool de cpp-httplib dimensionado con `new_task_queue`, y cierre de todas las sesiones en `Backend::stop()` antes de `Server::stop()`; verificar que `server` arranca con la variable y se detiene con `SIGTERM` con canales abiertos sin esperar
+- [x] 4.3 Crear la suite `channel` (`api`, `DATABASE`) con `ws::WebSocketClient` y los frames del contrato, y un `RpcRouter` con procedimientos de prueba lentos y rápidos. Debe cubrir:
   - saludo aceptado, token incorrecto, llamada sin saludo y plazo del saludo;
   - correlación, llamadas concurrentes y errores iguales a HTTP;
   - suscripción con evento de una factura creada por otro canal, y cancelación;
@@ -36,7 +36,7 @@
   - parada del `Backend` con canales abiertos en menos de un segundo.
 
   Verificar con `ctest --preset native -L api -j8` varias veces seguidas, sin fallos intermitentes
-- [ ] 4.4 Documentar el canal en `docs/architecture.md`:
+- [x] 4.4 Documentar el canal en `docs/architecture.md`:
   - §2 y §4.3: transporte, sobre y errores;
   - §4.4: `WS_MAX_CHANNELS`;
   - §7: saludo;

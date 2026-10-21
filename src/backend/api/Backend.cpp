@@ -2,12 +2,14 @@
 #include <backend/api/HttpRpcTransport.h>
 #include <backend/api/InvoiceProcedures.h>
 #include <backend/api/RpcRouter.h>
+#include <backend/api/WebSocketRpcTransport.h>
 #include <backend/core/Database.h>
 #include <backend/core/InvoiceService.h>
 #include <backend/core/Migrations.h>
 #include <backend/core/Statements.h>
 #include <httplib.h>
 #include <iostream>
+#include <memory>
 #include <stdexcept>
 #include <thread>
 
@@ -39,6 +41,15 @@ struct Backend::Impl {
         // Nagle's algorithm and delayed ACKs can add ~40 ms to a reply
         http.set_tcp_nodelay(true);
         http.set_payload_max_length(kMaxRequestBody);
+        // Each channel holds a thread of the server while open: the pool
+        // gets one more per channel, so HTTP (the web client's files too)
+        // always has its own
+        http.new_task_queue = [maxChannels = o.maxChannels] {
+            return new httplib::ThreadPool(CPPHTTPLIB_THREAD_POOL_COUNT,
+                                           CPPHTTPLIB_THREAD_POOL_MAX_COUNT + maxChannels);
+        };
+        // A client that answers no ping in a minute is gone
+        http.set_websocket_max_missed_pongs(2);
         if (!o.docroot.empty() && !http.set_mount_point("/", o.docroot))
             throw std::runtime_error("Docroot not found: " + o.docroot);
         if (o.accessLog) {
@@ -50,6 +61,9 @@ struct Backend::Impl {
             });
         }
         addRpcRoutes(http, router);
+        channels = std::make_unique<WebSocketRpcTransport>(
+            router, options.authorizer, ChannelOptions{.maxChannels = o.maxChannels, .workers = kPoolSize});
+        channels->addRoute(http);
     }
 
     BackendOptions  options;
@@ -57,6 +71,7 @@ struct Backend::Impl {
     InvoiceEvents   invoiceEvents;
     InvoiceService  invoices;
     RpcRouter       router;
+    std::unique_ptr<WebSocketRpcTransport> channels;
     httplib::Server http;
     std::thread     listener;
     int             boundPort = 0;
@@ -88,6 +103,8 @@ int Backend::port() const { return d->boundPort; }
 
 void Backend::stop() {
     if (!d->listener.joinable()) return;
+    // Open channels hold server threads that stop() would wait for
+    d->channels->closeAll();
     d->http.stop();
     d->listener.join();
 }

@@ -73,6 +73,8 @@ guita_add_test(idempotency LABELS db LIBS core DATABASE)
 
 # RPC API
 guita_add_test(rpcapi LABELS api LIBS api contract httplib::httplib DATABASE)
+# The persistent channel over WebSocket
+guita_add_test(channel LABELS api LIBS api contract httplib::httplib DATABASE)
 
 # Client: its classes are compiled into the suite, since they live in the
 # client executable that backs the QML module

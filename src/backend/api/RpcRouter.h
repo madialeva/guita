@@ -68,6 +68,9 @@ public:
     using MessageSink = std::function<void(std::string)>;
     RpcSubscription subscribe(const RpcCall &call, MessageSink onMessage) const;
 
+    // Whether the procedure is a stream, for transports that carry both kinds
+    bool isStream(const std::string &procedure) const { return m_streams.contains(procedure); }
+
 private:
     using Procedure = std::function<RpcResult(const std::string &)>;
     using Stream = std::function<RpcSubscription(const std::string &, MessageSink)>;

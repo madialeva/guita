@@ -9,10 +9,11 @@ add_library(core STATIC
 target_include_directories(core PUBLIC ${GUITA_INCLUDE_ROOT})
 target_link_libraries(core PUBLIC libpqxx::pqxx Threads::Threads)
 
-# RPC router, its HTTP transport (cpp-httplib) and Backend, shared by the server
-# and the standalone client
+# RPC router, its network transports (HTTP and the WebSocket channel, over
+# cpp-httplib) and Backend, shared by the server and the standalone client
 add_library(api STATIC
-    api/RpcRouter.cpp api/HttpRpcTransport.cpp api/InvoiceProcedures.cpp api/Backend.cpp)
+    api/RpcRouter.cpp api/HttpRpcTransport.cpp api/WebSocketRpcTransport.cpp
+    api/InvoiceProcedures.cpp api/Backend.cpp)
 target_link_libraries(api PUBLIC core contract PRIVATE httplib::httplib)
 
 add_executable(server server/main.cpp)

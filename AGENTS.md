@@ -129,7 +129,13 @@ QTP0004). Executables are written to `build/<preset>/bin`.
   receive decoded messages, convert them to and from `core`'s structs and
   throw `std::invalid_argument` for validation errors; the router turns
   exceptions into Connect codes. Neither handlers nor `core` know the
-  transport: HTTP statuses exist only in `HttpRpcTransport`.
+  transport: HTTP statuses exist only in `HttpRpcTransport`, and WebSocket
+  frames and close codes only in `WebSocketRpcTransport` (the persistent
+  channel at `/api/channel`, frames of `guita.channel.v1`).
+- Server events are stream procedures (`addStream<Request, Response>()`),
+  fed by an `EventTopic` that `core` reaches only through a plain C++
+  notification after commit. Subscribers of a topic must not block: the
+  channel and the in-process transport only queue the message.
 - `backend/api/Backend.h` must not include cpp-httplib, libpqxx or protobuf
   (pimpl): the client only needs that interface to embed the backend.
 - Authentication is a shared Bearer token for now (random per launch in
