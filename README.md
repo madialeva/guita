@@ -1,6 +1,7 @@
 <h1 align="center">Guita</h1>
 
 <p align="center">
+  <a href="https://github.com/madialeva/guita/actions/workflows/ci.yml"><img src="https://github.com/madialeva/guita/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="LICENSE.md"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License" /></a>
   <a href="#"><img src="https://img.shields.io/badge/c%2B%2B-23-00599C?logo=cplusplus&logoColor=white" alt="C++23" /></a>
   <a href="#"><img src="https://img.shields.io/badge/Qt-6.12_LTS-41CD52?logo=qt&logoColor=white" alt="Qt 6.12 LTS" /></a>
@@ -41,7 +42,7 @@ Proof of concept (v0.1.0). See [CHANGELOG.md](CHANGELOG.md) for what each versio
 | ⬜ | User authentication |
 | ⬜ | Desktop packages |
 | ✅ | Automated tests with an ephemeral PostgreSQL |
-| ⬜ | Continuous integration |
+| ✅ | Continuous integration (GitHub Actions) |
 
 ## Branching and versioning
 
@@ -49,7 +50,7 @@ The default branch is `develop/vX.Y.Z` (currently `develop/v0.1.0`), the
 version under development; there is no `main`/`master`. Releasing cuts
 `release/vX.Y.Z` and tags `vX.Y.Z`, and hotfixes bump the patch digit. The
 program version is declared once in `CMakeLists.txt` and matches the branch
-name. Feature work happens on short-lived `change/is<n>-<slug>` branches that
+name (`scripts/check-version.sh`, run by the CI). Feature work happens on short-lived `change/is<n>-<slug>` branches that
 PR into `develop/vX.Y.Z`, each tracked by an issue and an OpenSpec change.
 
 ## How it works
@@ -131,7 +132,10 @@ the emsdk that `setup-qt.sh` installs (without it, that part is skipped with a
 warning).
 
 `setup-qt.sh` needs [uv](https://docs.astral.sh/uv/) to provide the Python
-that Emscripten requires when the system one is older than 3.10. The CMake
+that Emscripten requires when the system one is older than 3.10. To build only
+the server, the desktop client and the tests, `scripts/setup-qt.sh
+--desktop-only` installs just the desktop kit, without the WebAssembly kit,
+emsdk or Python. The CMake
 presets look for Qt and the libraries where these scripts install them; when
 they live elsewhere, pass `-DCMAKE_PREFIX_PATH="<qt-prefix>;<libpqxx-prefix>;..."` to the native
 build, or add a `CMakeUserPresets.json` (for the web build it also sets the Qt
@@ -207,6 +211,12 @@ string with permission to create databases:
 ```sh
 GUITA_TEST_DB="host=127.0.0.1 port=5432 user=postgres password=secret dbname=postgres" ctest --preset native
 ```
+
+The CI runs the same suites on GitHub Actions for every push to a development
+or release branch and every pull request toward one, and also checks the
+contract's compatibility (`scripts/check-contract.sh`) and that the version
+matches the branch (`scripts/check-version.sh`); see
+[docs/architecture.md](docs/architecture.md), §10.4.
 
 ## Internationalization
 

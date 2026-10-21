@@ -46,6 +46,20 @@ guita_add_test(testdatabase LABELS db DATABASE)
 # Contract: reference bytes of its messages (also checked in WebAssembly by bench_encoding)
 guita_add_test(contract LABELS unit LIBS contract)
 
+# Version in CMakeLists.txt against the branch name (scripts/check-version.sh, run by the CI)
+set(GUITA_CHECK_VERSION ${PROJECT_SOURCE_DIR}/scripts/check-version.sh)
+math(EXPR GUITA_OTHER_MINOR "${PROJECT_VERSION_MINOR} + 1")
+add_test(NAME version_check_develop COMMAND ${GUITA_CHECK_VERSION} develop/v${PROJECT_VERSION})
+add_test(NAME version_check_release COMMAND ${GUITA_CHECK_VERSION} release/v${PROJECT_VERSION})
+add_test(NAME version_check_mismatch
+    COMMAND ${GUITA_CHECK_VERSION} develop/v${PROJECT_VERSION_MAJOR}.${GUITA_OTHER_MINOR}.${PROJECT_VERSION_PATCH})
+add_test(NAME version_check_change_branch COMMAND ${GUITA_CHECK_VERSION} change/is4-github-actions-ci)
+set_tests_properties(version_check_develop version_check_release version_check_mismatch
+    version_check_change_branch PROPERTIES LABELS unit)
+# A mismatch must fail with its message, not for any other reason
+set_tests_properties(version_check_mismatch PROPERTIES
+    PASS_REGULAR_EXPRESSION "error: CMakeLists.txt has version ${PROJECT_VERSION}, but branch")
+
 # Backend without database
 guita_add_test(invoiceservice LABELS unit LIBS core)
 guita_add_test(authorizer LABELS unit LIBS api)

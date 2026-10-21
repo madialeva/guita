@@ -5,7 +5,19 @@
 #   - emsdk $EMSDK_VERSION: the Emscripten release that Qt version requires
 #     (QT_EMCC_RECOMMENDED_VERSION in the kit's QtPublicWasmToolchainHelpers.cmake)
 #   - Python 3.12 through uv (standard location): Emscripten needs >= 3.10, EL9 ships 3.9
+#
+#   scripts/setup-qt.sh [--desktop-only]
+#
+# --desktop-only installs only the desktop kit, enough to build the server, the
+# native client and the tests (as the CI does): no WASM kit, emsdk or Python.
 set -euo pipefail
+
+DESKTOP_ONLY=0
+case "${1:-}" in
+    "") ;;
+    --desktop-only) DESKTOP_ONLY=1 ;;
+    *) echo "usage: $0 [--desktop-only]" >&2; exit 2 ;;
+esac
 
 SOFTWARE_DIR="${SOFTWARE_DIR:-$HOME/software}"
 QT_VERSION="${QT_VERSION:-6.12.0}"
@@ -27,6 +39,13 @@ fi
 MODULES=(qttasktree)
 [[ -d "$QT_DIR/$QT_VERSION/gcc_64/lib/cmake/Qt6TaskTree" ]] ||
     "$AQT" install-qt linux desktop "$QT_VERSION" linux_gcc_64 -m "${MODULES[@]}" -O "$QT_DIR"
+
+if [[ "$DESKTOP_ONLY" == 1 ]]; then
+    echo
+    echo ">> Done (desktop kit only). Build with: cmake --preset native && cmake --build --preset native"
+    exit 0
+fi
+
 [[ -d "$QT_DIR/$QT_VERSION/wasm_singlethread/lib/cmake/Qt6TaskTree" ]] ||
     "$AQT" install-qt all_os wasm "$QT_VERSION" wasm_singlethread -m "${MODULES[@]}" -O "$QT_DIR"
 

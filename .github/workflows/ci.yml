@@ -1,0 +1,109 @@
+# Builds the project and runs the whole test suite on every push to a
+# development or release branch and on every pull request toward one, with the
+# toolchain installed by the repository scripts and cached (docs/architecture.md §10.4)
+name: CI
+
+on:
+  push:
+    branches: ['develop/**', 'release/**']
+  pull_request:
+    branches: ['develop/**', 'release/**']
+  workflow_dispatch:
+
+# A new run of the same branch or pull request cancels the one in progress
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    # Required by the branch rulesets: keep this name stable
+    name: Build and test
+    runs-on: ubuntu-24.04
+    # A cold run builds protobuf with abseil
+    timeout-minutes: 90
+
+    # The database suites use this server through GUITA_TEST_DB, so the CTest
+    # fixture starts no container. The password only protects a server that
+    # lives as long as the job, on the runner
+    services:
+      postgres:
+        image: postgres:18.6
+        env:
+          POSTGRES_PASSWORD: guita-ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready --username postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      CC: gcc-14
+      CXX: g++-14
+      GUITA_TEST_DB: host=127.0.0.1 port=5432 user=postgres password=guita-ci dbname=postgres
+
+    steps:
+      # The whole history, so that check-contract.sh has origin/develop/vX.Y.Z
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # The branch pushed to, or the base branch of the pull request; a manual
+      # run has no branch to compare with
+      - name: Check the version against the branch
+        if: github.event_name != 'workflow_dispatch'
+        env:
+          BRANCH: ${{ github.base_ref || github.ref_name }}
+        run: scripts/check-version.sh "$BRANCH"
+
+      # Build tools and the libraries the project and Qt take from the system
+      - name: Install the system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            ninja-build libpq-dev zlib1g-dev \
+            libgl-dev libegl-dev libxkbcommon-dev libfontconfig1 libfreetype6 \
+            libglib2.0-0t64 libdbus-1-3
+
+      # Qt and the libraries in ~/software, where the presets look for them.
+      # Saved right after installing, so that a run with failing tests keeps it
+      - name: Restore the toolchain
+        id: toolchain
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/software
+          key: toolchain-ubuntu-24.04-gcc14-${{ hashFiles('scripts/setup-qt.sh', 'scripts/build-deps.sh') }}
+
+      - name: Install the toolchain
+        if: steps.toolchain.outputs.cache-hit != 'true'
+        run: |
+          scripts/setup-qt.sh --desktop-only
+          scripts/build-deps.sh
+          rm -rf ~/software/src ~/software/aqt-venv ~/software/aqtinstall.log
+
+      - name: Save the toolchain
+        if: steps.toolchain.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: ~/software
+          key: ${{ steps.toolchain.outputs.cache-primary-key }}
+
+      - name: Configure
+        run: cmake --preset native
+
+      - name: Build
+        run: cmake --build --preset native
+
+      - name: Test
+        run: ctest --preset native --parallel "$(nproc)"
+
+      # Also when the build or the tests fail, so that a pull request shows
+      # both kinds of problem at once
+      - name: Check the contract's compatibility
+        if: ${{ !cancelled() }}
+        run: scripts/check-contract.sh
