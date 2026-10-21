@@ -636,8 +636,8 @@ run of the same branch or pull request cancels the one in progress, and the
 workflow only reads the repository (`contents: read`). The WebAssembly build
 and the measurements of `tests/bench` are not part of the CI.
 
-**Requiring it.** A repository ruleset on `develop/**` and `release/**`
-(Settings → Rules → Rulesets) requires the `Build and test` status check, with
+**Requiring it.** A repository ruleset, `develop and release`, on
+`develop/**` and `release/**` (Settings → Rules → Rulesets) requires the `Build and test` status check, with
 the branch up to date before merging, so that no pull request is merged while
 the CI is red. GitHub only offers checks it has already seen, so the ruleset is
 created after the first run, and the job keeps its name.
@@ -652,7 +652,6 @@ created after the first run, and the job keeps its name.
   permissions on first launch, `pg_ctl start` on a free loopback port, and
   recovery of an orphaned instance after a crash. It does not run as root on
   Linux; the first `initdb` takes a few seconds, later starts about one.
-- **Typed contract with Protobuf** and RPC over HTTP between client and backend.
 - **User authentication** owned by the backend (§7).
 - **Desktop packaging** (§9.2).
 - **Translated backend error messages**.

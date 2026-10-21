@@ -126,12 +126,16 @@ El README muestra el badge `actions/workflows/ci.yml/badge.svg` sin parámetro d
 - **[Las mirrors de Qt o GitHub fallan durante una instalación en frío]** → La ejecución se repite; con la caché ya guardada, las siguientes no descargan nada.
 - **[Una prueba depende del tiempo o del orden y falla en el runner, más lento y con menos núcleos]** → Se investiga como un fallo real; el CI existe precisamente para encontrarlos. No se añaden reintentos automáticos.
 - **[El job compila en Ubuntu y en local se compila en EL9]** → Es intencionado (decisión 1): detecta dependencias implícitas del entorno local. Un fallo que solo ocurre en uno de los dos se corrige en el proyecto, no en el workflow.
+- **[`workflow_dispatch` solo existe cuando el workflow está en la rama por defecto]** → Este cambio se verifica con su PR; a partir de la fusión, la ejecución manual sirve para probar ramas de cambio antes de abrir su PR.
+- **[Las cachés de un PR solo las ven las ejecuciones de ese PR]** → El primer push a `develop/vX.Y.Z` tras la fusión instala en frío y guarda una caché que ven todos los PR posteriores.
 - **[El check de contrato en un push a `develop/vX.Y.Z` se compara consigo mismo]** → Esa rama solo recibe merges de PR, que ya se comprobaron contra ella.
 
 ## Migration Plan
 
 No hay migración de datos ni de API. El despliegue es:
 1. fusionar el PR;
-2. que el propietario cree el ruleset (decisión 7).
+2. que el propietario cree el ruleset (decisión 7), antes de la fusión, en cuanto el check ha aparecido en el PR del cambio.
+
+Tras la fusión, ya fuera del cambio archivado, se comprueba que el push a `develop/vX.Y.Z` ejecuta el CI y guarda la caché de esa rama, que el badge del README muestra su estado y que `workflow_dispatch` está disponible.
 
 Revertir es borrar el workflow y el ruleset. El modo `--desktop-only` y `check-version.sh` no cambian nada de lo que ya existe.

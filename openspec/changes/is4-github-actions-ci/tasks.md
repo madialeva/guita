@@ -27,8 +27,9 @@
 
 ## 3. Verificación en GitHub
 
-- [ ] 3.1 Con la rama subida por el usuario, lanzar el workflow con `workflow_dispatch` sobre `change/is4-github-actions-ci`. Verificar que la ejecución en frío instala la toolchain, guarda la caché y termina en verde.
-- [ ] 3.2 Relanzarlo. Verificar que restaura la caché, no ejecuta los scripts de instalación y termina en verde en pocos minutos.
-- [ ] 3.3 Comprobar el camino en rojo en una rama desechable con una prueba rota y un campo del contrato borrado sin reservar. Verificar que el job falla en `ctest` y en `check-contract.sh` con mensajes claros, que la caché no se pierde y que la rama desechable se borra después.
-- [ ] 3.4 Abrir el PR hacia `develop/v0.1.0` (lo hace el usuario). Verificar que el check aparece en el PR y que `check-version.sh` compara con `develop/v0.1.0`.
-- [ ] 3.5 El propietario crea el ruleset sobre `develop/**` y `release/**` que exige el check del job, siguiendo `docs/architecture.md` §10.4. Verificar que el PR muestra el check como obligatorio y que el badge del README se ve tras la fusión.
+`workflow_dispatch` solo está disponible cuando el workflow ya existe en la rama por defecto, así que, hasta la fusión, el CI de esta rama se lanza con su PR.
+
+- [x] 3.1 El usuario sube la rama y abre el PR hacia `develop/v0.1.0` (puede ser en borrador). Verificar que el check `Build and test` aparece en el PR, que `check-version.sh` compara con `develop/v0.1.0` y que la ejecución en frío instala la toolchain, guarda la caché y termina en verde.
+- [x] 3.2 Relanzar el job desde el PR. Verificar que restaura la caché, no ejecuta los scripts de instalación y termina en verde en pocos minutos.
+- [x] 3.3 Comprobar el camino en rojo con un PR desechable en borrador desde una rama con una prueba rota y un campo del contrato renumerado (borrarlo dejaría el proyecto sin compilar y el job fallaría antes de `ctest`). Verificar que el job falla en `ctest` y en `check-contract.sh` con mensajes claros y que la caché queda guardada aunque fallen las pruebas (el PR desechable no ve la del PR del cambio, porque las cachés de un PR son solo suyas). Después se cierran el PR y la rama y se borra su caché.
+- [x] 3.4 Crear, con la autorización del propietario, el ruleset sobre `develop/**` y `release/**` que exige el check `Build and test`, siguiendo `docs/architecture.md` §10.4. Verificar que el PR del cambio muestra el check como obligatorio.
