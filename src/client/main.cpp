@@ -1,6 +1,6 @@
 #include <client/ApiConfig.h>
 #include <client/ApiConnection.h>
-#include <client/HttpTransport.h>
+#include <client/WebSocketTransport.h>
 #include <QCommandLineParser>
 #include <QGuiApplication>
 #include <QLocale>
@@ -39,9 +39,10 @@ int main(int argc, char *argv[]) {
 #else
     const auto mode = ApiConnection::Connected;
 #endif
-    // Web / connected modes: HTTP, with the shared development token, if any
-    ApiConnection::Settings settings{mode, defaultApiBaseUrl(),
-                                     std::make_shared<HttpTransport>(defaultApiBaseUrl(), qgetenv("API_TOKEN"))};
+    // Web / connected modes: the persistent channel, with the shared
+    // development token, if any
+    ApiConnection::Settings settings{mode, defaultChannelUrl(),
+                                     std::make_shared<WebSocketTransport>(defaultChannelUrl(), qgetenv("API_TOKEN"))};
 
 #ifdef APP_STANDALONE_SUPPORT
     // Destroyed when main returns, after the QML engine (and with it the

@@ -48,18 +48,18 @@
 
 ## 5. Cliente sobre el canal y eventos en la vista
 
-- [ ] 5.1 Añadir `qtwebsockets` a `scripts/setup-qt.sh` en los dos kits, con la comprobación de `Qt6WebSockets` para instalaciones existentes, y ejecutarlo; verificar que `~/software/Qt/6.12.0/{gcc_64,wasm_singlethread}/lib/cmake/Qt6WebSockets` existen y que `--desktop-only` solo instala el de escritorio
-- [ ] 5.2 Ampliar `ApiTransport` (`Repeat`, `subscribe()`, disponibilidad) y `ApiConnection` (`call<Response>(..., Repeat)`, `subscribe<Response>()`, propiedad `available`); `InProcTransport` con suscripciones vía `Backend::subscribe()` y su cierre ordenado; verificar que el cliente nativo compila y que la suite `invoicerepository` pasa en proceso
-- [ ] 5.3 Crear `WebSocketTransport` (decisión 8 del diseño: conexión perezosa, saludo, correlación, cola, reenvío solo de `Repeat::Safe`, espera exponencial, plazo, saludo rechazado sin reconexión, `Cancel`, `Options`) y `defaultChannelUrl()` en `ApiConfig.h`; retirar `HttpTransport` y configurar el canal en `main.cpp` para web y conectado; enlazar `Qt6::WebSockets`; verificar que el cliente compila en nativo y en WASM (`scripts/build-wasm.sh`)
-- [ ] 5.4 `InvoiceRepository` con `request_id` (`QUuid`) y `Repeat::Safe` en `create()`, `Repeat::Safe` en `list()` y `watch()` con las señales `watching()` e `invoiceCreated(InvoiceRow)`; `Main.qml` con `watch()`, recarga con los eventos y aviso de backend no disponible; refrescar las traducciones con `update_translations` y traducir al español los textos nuevos; verificar que `client_qmllint` sigue limpio y que `guita_es.ts` no tiene entradas sin traducir
-- [ ] 5.5 Pasar `invoicerepository` a `WebSocketTransport` e `InProcTransport` con los casos de hoy y añadir:
+- [x] 5.1 Añadir `qtwebsockets` a `scripts/setup-qt.sh` en los dos kits, con la comprobación de `Qt6WebSockets` para instalaciones existentes, y ejecutarlo; verificar que `~/software/Qt/6.12.0/{gcc_64,wasm_singlethread}/lib/cmake/Qt6WebSockets` existen y que `--desktop-only` solo instala el de escritorio
+- [x] 5.2 Ampliar `ApiTransport` (`Repeat`, `subscribe()`, disponibilidad) y `ApiConnection` (`call<Response>(..., Repeat)`, `subscribe<Response>()`, propiedad `available`); `InProcTransport` con suscripciones vía `Backend::subscribe()` y su cierre ordenado; verificar que el cliente nativo compila y que la suite `invoicerepository` pasa en proceso
+- [x] 5.3 Crear `WebSocketTransport` (decisión 8 del diseño: conexión perezosa, saludo, correlación, cola, reenvío solo de `Repeat::Safe`, espera exponencial, plazo, saludo rechazado sin reconexión, `Cancel`, `Options`) y `defaultChannelUrl()` en `ApiConfig.h`; retirar `HttpTransport` y configurar el canal en `main.cpp` para web y conectado; enlazar `Qt6::WebSockets`; verificar que el cliente compila en nativo y en WASM (`scripts/build-wasm.sh`)
+- [x] 5.4 `InvoiceRepository` con `request_id` (`QUuid`) y `Repeat::Safe` en `create()`, `Repeat::Safe` en `list()` y `watch()` con las señales `watching()` e `invoiceCreated(InvoiceRow)`; `Main.qml` con `watch()`, recarga con los eventos y aviso de backend no disponible; refrescar las traducciones con `update_translations` y traducir al español los textos nuevos; verificar que `client_qmllint` sigue limpio y que `guita_es.ts` no tiene entradas sin traducir
+- [x] 5.5 Pasar `invoicerepository` a `WebSocketTransport` e `InProcTransport` con los casos de hoy y añadir:
   - eventos de una factura creada por otra conexión, con `watching` primero, en los dos transportes;
   - `available` en los dos transportes;
-  - token incorrecto con el mensaje del backend y sin reconexiones (contando las conexiones que recibe el servidor);
+  - token incorrecto con el mensaje del backend y sin reconexiones (contando los intentos de conexión del transporte), hasta la siguiente llamada;
   - llamadas descartadas para objetos destruidos.
 
   Verificar con `ctest --preset native -L client`
-- [ ] 5.6 Documentar el cliente:
+- [x] 5.6 Documentar el cliente:
   - `docs/architecture.md`: §1, §2, §3 (enlaces de `client`), §5.1, §5.3, §6 (eventos en proceso), §8 (Qt WebSockets), §12 (licencia) y la tabla de suites;
   - AGENTS.md: tabla de modos, principios, QML y C++ con `WebSocketTransport` y `Repeat`;
   - README: modos, tabla de estado y requisitos;

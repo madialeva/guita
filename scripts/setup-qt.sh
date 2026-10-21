@@ -34,10 +34,14 @@ if [[ ! -x "$AQT" ]]; then
     "$SOFTWARE_DIR/aqt-venv/bin/pip" install -q --upgrade pip aqtinstall
 fi
 
-# Modules beyond aqt's defaults: qttasktree (dependency of QmlAssetDownloader).
-# A kit is (re)installed when it or that module is missing
-MODULES=(qttasktree)
-[[ -d "$QT_DIR/$QT_VERSION/gcc_64/lib/cmake/Qt6TaskTree" ]] ||
+# Modules beyond aqt's defaults: qttasktree (dependency of QmlAssetDownloader)
+# and qtwebsockets (the client's persistent channel). A kit is (re)installed
+# when it or one of those modules is missing
+MODULES=(qttasktree qtwebsockets)
+has_modules() {
+    [[ -d "$1/lib/cmake/Qt6TaskTree" && -d "$1/lib/cmake/Qt6WebSockets" ]]
+}
+has_modules "$QT_DIR/$QT_VERSION/gcc_64" ||
     "$AQT" install-qt linux desktop "$QT_VERSION" linux_gcc_64 -m "${MODULES[@]}" -O "$QT_DIR"
 
 if [[ "$DESKTOP_ONLY" == 1 ]]; then
@@ -46,7 +50,7 @@ if [[ "$DESKTOP_ONLY" == 1 ]]; then
     exit 0
 fi
 
-[[ -d "$QT_DIR/$QT_VERSION/wasm_singlethread/lib/cmake/Qt6TaskTree" ]] ||
+has_modules "$QT_DIR/$QT_VERSION/wasm_singlethread" ||
     "$AQT" install-qt all_os wasm "$QT_VERSION" wasm_singlethread -m "${MODULES[@]}" -O "$QT_DIR"
 
 uv python install 3.12                 # creates ~/.local/bin/python3.12

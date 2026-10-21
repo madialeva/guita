@@ -80,10 +80,10 @@ guita_add_test(channel LABELS api LIBS api contract httplib::httplib DATABASE)
 # client executable that backs the QML module
 set(GUITA_CLIENT_DIR ${PROJECT_SOURCE_DIR}/src/client)
 guita_add_test(invoicerepository LABELS client
-    LIBS api contract Qt6::Network Qt6::Qml
+    LIBS api contract Qt6::WebSockets Qt6::Qml
     SOURCES ${GUITA_CLIENT_DIR}/ApiConnection.h ${GUITA_CLIENT_DIR}/ApiConnection.cpp
             ${GUITA_CLIENT_DIR}/ApiTransport.h
-            ${GUITA_CLIENT_DIR}/HttpTransport.h ${GUITA_CLIENT_DIR}/HttpTransport.cpp
+            ${GUITA_CLIENT_DIR}/WebSocketTransport.h ${GUITA_CLIENT_DIR}/WebSocketTransport.cpp
             ${GUITA_CLIENT_DIR}/InProcTransport.h ${GUITA_CLIENT_DIR}/InProcTransport.cpp
             ${GUITA_CLIENT_DIR}/InvoiceRepository.h ${GUITA_CLIENT_DIR}/InvoiceRepository.cpp
             ${GUITA_CLIENT_DIR}/InvoiceRow.h

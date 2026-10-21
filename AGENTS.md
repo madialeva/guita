@@ -13,15 +13,19 @@ and keep it up to date when they change.
 
 | Mode | Client | Backend |
 |---|---|---|
-| Web | Qt/QML compiled to WebAssembly | remote `server`, which also serves the WASM files |
-| Desktop connected | native Qt/QML | remote `server` (`API_URL`) |
+| Web | Qt/QML compiled to WebAssembly | remote `server` over the persistent channel; it also serves the WASM files |
+| Desktop connected | native Qt/QML | remote `server` (`API_URL`) over the persistent channel |
 | Desktop standalone | native Qt/QML (`--standalone`) | backend embedded in the client process, called in process: no network, no port, no token |
 
 Principles that every change must keep:
 
 - The client always talks to the backend through the RPC contract and never
-  knows which transport carries the calls: HTTP in the web and connected modes,
-  in process in standalone mode. No shortcut skips the contract.
+  knows which transport carries the calls and the server's events: the
+  persistent WebSocket channel in the web and connected modes, in process in
+  standalone mode. No shortcut skips the contract. The server also serves the
+  contract over HTTP (Connect) for tools such as `buf curl`.
+- There is a single server, without horizontal scaling: server events are
+  produced and delivered within one process.
 - All business logic lives in the backend (`src/backend/`); the client only
   presents and validates for user experience. The backend repeats every
   critical validation: the WASM client is in the user's hands.
@@ -150,13 +154,18 @@ context properties, `qmlRegister*` calls or objects injected from `main.cpp`:
 
 - Per-view objects (repositories, controllers) use `QML_ELEMENT` and are
   instantiated by the view that owns them (`Main.qml` creates `InvoiceRepository`).
-  Repositories call procedures through `ApiConnection::call<Response>()` with
-  the contract's messages and hand the views typed value types
-  (`InvoiceRow`, `QML_VALUE_TYPE`), never `QVariantMap`.
-- `ApiConnection` delegates to an `ApiTransport`: `HttpTransport`
-  (`QNetworkAccessManager`, binary Connect RPC) or `InProcTransport` (native
-  only: `Backend::call()` on a pool thread, results back through the event
-  queue; its destructor waits for the calls in flight). Neither is visible to QML.
+  Repositories call procedures through `ApiConnection::call<Response>()` and
+  subscribe to events through `ApiConnection::subscribe<Response>()` with the
+  contract's messages, and hand the views typed value types (`InvoiceRow`,
+  `QML_VALUE_TYPE`), never `QVariantMap`. Only reads and operations with a
+  `request_id` pass `Repeat::Safe`, which lets the transport send them again
+  after a lost connection.
+- `ApiConnection` delegates to an `ApiTransport`: `WebSocketTransport` (Qt
+  WebSockets, the persistent channel, with reconnection) or `InProcTransport`
+  (native only: `Backend::call()` on a pool thread and `Backend::subscribe()`,
+  results and events back through the event queue; its destructor ends the
+  subscriptions and waits for the calls in flight). Neither is visible to QML;
+  `ApiConnection.available` tells the views whether the backend is reachable.
 - Application-wide services are `QML_SINGLETON` with a static `create()`
   (`ApiConnection`). Qt prefers a default constructor over `create()`, so such
   a class must not be default-constructible.

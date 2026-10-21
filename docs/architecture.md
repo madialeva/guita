@@ -9,15 +9,16 @@ A single C++ code base that produces:
 
 | Mode | Client | Backend | Database |
 |---|---|---|---|
-| **Web** | Qt/QML compiled to WebAssembly | remote server | server PostgreSQL |
-| **Desktop connected** | native Qt/QML | remote server | server PostgreSQL |
+| **Web** | Qt/QML compiled to WebAssembly | remote server, over the persistent channel | server PostgreSQL |
+| **Desktop connected** | native Qt/QML | remote server, over the persistent channel | server PostgreSQL |
 | **Desktop standalone** | native Qt/QML | backend embedded in the client process, called in process | local PostgreSQL (embedded instance planned, see §11) |
 
 Principles:
 
 - The **client always talks to the backend through the RPC contract** and never
-  knows which transport carries the calls: HTTP in the web and connected modes,
-  in process in standalone mode. No shortcut skips the contract.
+  knows which transport carries the calls and the server's events: a
+  persistent WebSocket channel in the web and connected modes, in process in
+  standalone mode. No shortcut skips the contract.
 - **All business logic lives in the backend** (plain C++: cpp-httplib, libpqxx,
   protobuf). The client only presents data and validates for user experience; the
   backend repeats every critical validation, because the WASM client is in the
@@ -35,7 +36,8 @@ Principles:
                 │  (native or WASM)            │
                 │  ApiConnection + repositories│
                 └──────────────┬───────────────┘
-                               │ contract (Protobuf): HTTP + Bearer token,
+                               │ contract (Protobuf): persistent channel
+                               │ (WebSocket, token in its first frame),
                                │ or in process (standalone)
                 ┌──────────────▼───────────────┐
                 │  backend/api                 │
@@ -82,7 +84,7 @@ docs/                        this document
 | `core` | static | `backend/core` | `libpqxx::pqxx` |
 | `api` | static | `backend/api` | `core`, `contract`; privately `httplib::httplib` |
 | `server` | executable | `backend/server` | `api` |
-| `client` | executable + `Guita` QML module | `client` | Qt Quick, Qt Network, `contract`; `api` on native builds |
+| `client` | executable + `Guita` QML module | `client` | Qt Quick, Qt WebSockets, `contract`; `api` on native builds |
 
 Dependencies flow `client → api → core`, and the client reaches the backend
 only through `backend/api/Backend.h`, solely for standalone mode. The root
@@ -454,27 +456,58 @@ Reading:
 ### 5.1 API connection and repositories
 
 `ApiConnection` is a `QML_SINGLETON` holding the mode (`Web`, `Connected`,
-`Standalone`), the base URL of the HTTP modes and the transport. `main.cpp`
-calls `ApiConnection::configure()` before loading the QML, and QML gets the
+`Standalone`), the URL of the channel in the web and connected modes, the
+transport and whether the backend is `available` now. `main.cpp` calls
+`ApiConnection::configure()` before loading the QML, and QML gets the
 instance through the static `create()`; the class is not default-constructible
 on purpose (Qt prefers a default constructor over `create()`).
-`ApiConnection::call<Response>(procedure, request, context, onResponse,
-onError)` encodes the request (any message of the contract), hands the bytes
-to the transport and decodes the response.
 
-The transport is an `ApiTransport`, invisible to QML, with a single
-asynchronous operation (procedure and encoded request in, encoded response or
-error message out, in the UI thread and only while the caller is alive):
+- `ApiConnection::call<Response>(procedure, request, context, onResponse,
+  onError, repeat)` encodes the request (any message of the contract), hands
+  the bytes to the transport and decodes the response. `repeat`
+  (`Repeat::Never` by default, or `Repeat::Safe`) says whether the call may be
+  sent again when the connection is lost before its reply: only reads and
+  operations with a `request_id` are marked safe, so nothing is applied twice
+  by mistake.
+- `ApiConnection::subscribe<Response>(procedure, request, context, onMessage,
+  onError)` subscribes to a stream procedure (server events) until `context`
+  is destroyed; a message this version cannot decode is skipped.
 
-- `HttpTransport` (web and connected): `POST <base>/<procedure>` with
-  `QNetworkAccessManager`, `application/proto`, `Connect-Protocol-Version: 1`
-  and the Bearer token; Connect errors give the message.
+The transport is an `ApiTransport`, invisible to QML, with two asynchronous
+operations, a call and a subscription (results and messages in the UI thread
+and only while the caller is alive), and a notification of whether the
+backend is reachable:
+
+- `WebSocketTransport` (web and connected): the persistent channel (§4.3) with
+  Qt WebSockets, in the UI thread and without blocking waits:
+  - the connection opens with the first call or subscription and sends the
+    `hello` with the Bearer token; calls made meanwhile wait for the
+    `welcome`, and each call and subscription gets a growing correlation ID;
+  - when the connection is lost the backend is unavailable, and the
+    transport reconnects while calls or subscriptions remain, waiting 0.5
+    seconds, then twice as long each time up to 30 seconds, ±20 % so that
+    clients cut off together do not come back together; a `welcome` resets
+    the wait;
+  - after the `welcome`, calls not sent yet go out in the order they were
+    made; calls in flight when the connection was lost are sent again only
+    if they are `Repeat::Safe`, and the others fail with "Connection to the
+    backend lost"; subscriptions are opened again, so their messages start
+    over (with `started` for `WatchInvoices`);
+  - a call without reply 30 seconds after it was made fails with "Backend
+    unavailable" (a subscription has no such limit);
+  - a `goodbye` with `unauthenticated` fails what is pending with the
+    backend's message, and the transport does not reconnect until the next
+    call or subscription;
+  - destroying the context of a subscription sends its `cancel`.
 - `InProcTransport` (native only): builds an `RpcCall` and runs
   `Backend::call()` on a thread of its own `QThreadPool`, since the router is
   synchronous and PostgreSQL may take a while; the result comes back to the UI
-  thread through the event queue. The pool threads carry only a call id and
-  the result: pending callbacks and their context objects are kept and checked
-  in the UI thread. The destructor waits for the calls in flight.
+  thread through the event queue. Subscriptions use `Backend::subscribe()`:
+  each message comes from the thread that produced the event, also through
+  the event queue. Other threads carry only an id and the result or message:
+  pending callbacks and their context objects are kept and checked in the UI
+  thread. The destructor ends the subscriptions and waits for the calls in
+  flight. The backend is always available.
 
 Repositories (`InvoiceRepository`) are `QML_ELEMENT`s instantiated by the view
 that uses them, with a typed `REQUIRED` `connection` property. They build the
@@ -482,7 +515,10 @@ contract's messages, expose `Q_INVOKABLE` operations with typed arguments
 (`create(customer, customerTaxId, totalCents)`) and report results through
 signals as typed value types: `InvoiceRow` (`QML_VALUE_TYPE`), with `QString`
 for the contract's UTF-8 strings and doubles for ids and totals, because QML's
-`int` has 32 bits; doubles are exact up to 2^53.
+`int` has 32 bits; doubles are exact up to 2^53. `create()` gives every
+invoice a new `request_id` (`QUuid`) and is safe to repeat, like `list()`.
+`watch()` subscribes, once per repository, to `WatchInvoices`: `watching()`
+with each `started`, and `invoiceCreated()` with each invoice.
 
 **Everything is asynchronous** (signals and callbacks): WebAssembly forbids
 blocking waits and nested `QEventLoop::exec()`.
@@ -494,6 +530,11 @@ registration (`QML_ELEMENT`, `QML_SINGLETON`), never through context
 properties, `qmlRegister*` calls or objects injected from `main.cpp`. Views use
 typed properties so `qmllint` checks every access.
 
+`Main.qml` calls `watch()` when it loads and reloads the list on `watching()`
+(the first time, and after every reconnection, which may have missed events)
+and on `invoiceCreated()`, so the list follows what any client creates. It
+shows a notice while `ApiConnection.available` is false.
+
 Presentation logic worth testing lives in JavaScript libraries of the module
 (`.pragma library`), such as `Amount.js`, which parses typed amounts into cents
 and formats cents per locale; views import them and Qt Quick Test covers them
@@ -503,8 +544,10 @@ without loading any view.
 
 Only two pieces differ between native and WASM:
 
-- `ApiConfig.h`: in WASM the API base URL is the page origin + `/api/` (same
-  origin, so no CORS); natively it is `API_URL` (default `http://127.0.0.1:8090/api/`).
+- `ApiConfig.h`: in WASM the channel is at the page's host +
+  `/api/channel`, `wss://` behind `https://` (same origin, so no CORS);
+  natively it is beside `API_URL`, the API's base URL (default
+  `http://127.0.0.1:8090/api/`, so `ws://127.0.0.1:8090/api/channel`).
 - `main.cpp` and `InProcTransport`: standalone support (`APP_STANDALONE_SUPPORT`,
   defined only on native builds) embeds the backend and calls it in process.
 
@@ -526,9 +569,12 @@ locale (the browser locale in WASM). Refresh the catalogs with the
 2. Configures `ApiConnection` with `InProcTransport` over that backend.
 
 Calls run on the transport's pool threads, so they never block the UI.
-`Backend` is declared before the QML engine in `main()`, so it is destroyed
-after the views, the connection and the transport (which waits for the calls
-in flight) are gone. Compared with the former loopback HTTP, there is no
+Server events reach the views in this mode too: the transport subscribes
+through `Backend::subscribe()`, so `WatchInvoices` behaves as over the channel
+for invoices created in this process. `Backend` is declared before the QML
+engine in `main()`, so it is destroyed after the views, the connection and
+the transport (which ends its subscriptions and waits for the calls in
+flight) are gone. Compared with the former loopback HTTP, there is no
 socket, TCP, HTTP parsing nor token in this mode (§4.5 measures the
 difference).
 
@@ -543,8 +589,8 @@ Authentication is pluggable rather than tied to an identity provider:
   `tokenAuthorizer()` implements the current shared-token check; validating
   tokens from any identity provider (for example JWTs from an OIDC server) is
   just another `Authorizer`, with no changes elsewhere.
-- **Client**: `ApiConnection` sends the Bearer token it is configured with;
-  whatever obtains the token only has to hand it over.
+- **Client**: the transport sends the Bearer token it is configured with in
+  the channel's `hello`; whatever obtains the token only has to hand it over.
 
 | Mode | Current |
 |---|---|
@@ -563,7 +609,7 @@ mode self-contained, without external services.
 |---|---|---|
 | GCC | C++23 (13 or later) | system |
 | CMake | 3.21+ | system |
-| Qt (desktop + `wasm_singlethread`) | 6.12.0 LTS | `scripts/setup-qt.sh` (aqtinstall) |
+| Qt (desktop + `wasm_singlethread`), with `qttasktree` and `qtwebsockets` | 6.12.0 LTS | `scripts/setup-qt.sh` (aqtinstall) |
 | Emscripten | 5.0.5 | `scripts/setup-qt.sh` (emsdk) |
 | libpqxx | 8.0.2 (requires C++20) | `scripts/build-deps.sh` (static, PIC) |
 | cpp-httplib | 0.61.0 | `scripts/build-deps.sh` (header-only, with zlib) |
@@ -714,7 +760,7 @@ application's default connection string.
 | `rpcrouter` | `unit` | `RpcRouter` without any transport: binary calls, fields of a later version skipped, authorization, unknown procedures, malformed messages, exceptions to codes, registrations with types of another method or package refused, concurrent calls; stream procedures (messages in order, end on release, authorization, unary and stream kept apart); `EventTopic` (greeting first while publishing, no call after release from concurrent threads, failing subscribers) |
 | `channel` | `api` | the persistent channel with cpp-httplib's WebSocket client and the contract's frames, on a `Backend` and on stub procedures: hello accepted, wrong or missing token, a first frame that is no hello and no hello at all; calls and errors as over HTTP; concurrent calls answered as they finish and a correlation ID in use; events of another channel and cancellation; text and undecodable frames and a second hello; the limit of channels with HTTP still served; a client that does not read closed without holding the publisher; `Backend::stop()` with open channels in under a second |
 | `rpcapi` | `api` | the RPC API over HTTP in binary: both procedures, absent tax ID, a creation repeated with its request ID, `WatchInvoices` refused over HTTP, an invoice created over HTTP reaching an in-process subscriber, unknown fields, Connect errors (400, 401, 404, 405, 415, JSON included), error bodies with quotes, control characters and non-ASCII text read with `QJsonDocument`, and an in-process `Backend` that listens on no port |
-| `invoicerepository` | `client` | `ApiConnection` + `InvoiceRepository` with both transports (HTTP with a token, and in process against a backend that listens on no port), same results: list, create, absent tax ID, the backend's validation message, a wrong token, an unreachable backend, results dropped for destroyed callers |
+| `invoicerepository` | `client` | `ApiConnection` + `InvoiceRepository` with both transports (the channel with a token, and in process against a backend that listens on no port), same results and events: list, create (a new request ID each time), absent tax ID, the backend's validation message, invoices created by another client while watching, availability; a wrong token without reconnecting, an unreachable backend failing in time, results dropped for destroyed callers |
 | `amount` | `qml` | `Amount.js`: typed amounts with comma or dot, limits and rejections, and their display per locale |
 
 ### 10.4 Continuous integration
@@ -776,7 +822,7 @@ created after the first run, and the job keeps its name.
   PostgreSQL License); protobuf and abseil are also linked statically into the
   client, `client.wasm` included.
   The Qt modules the client uses (Core, Gui, Qml, Quick, Quick Controls,
-  Network) are LGPLv3, GPL or commercial. Using Qt
+  Network, WebSockets) are LGPLv3, GPL or commercial. Using Qt
   under the LGPL is compatible with MIT and with selling the product; the
   obligations apply when builds are distributed, paid or free:
   - **Desktop**: link Qt dynamically (as the build does) so users can replace

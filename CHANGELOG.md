@@ -36,7 +36,12 @@ First version: a proof of concept of the architecture, to be released as 0.1.0.
   flight at once. `WS_MAX_CHANNELS` limits the channels open at once (64 by
   default).
 - Server events: `InvoiceService.WatchInvoices` announces every invoice
-  created, whoever creates it, over the channel and in process.
+  created, whoever creates it, over the channel and in process; the invoice
+  list of every client refreshes when another one creates an invoice.
+- The web and desktop connected clients talk to the server over the
+  persistent channel: they reconnect on their own, waiting longer each time,
+  send again only the calls that are safe to repeat, and show when the
+  backend is unreachable.
 - Idempotent invoice creation: `CreateInvoice` takes an optional `request_id`
   (a UUID), and a request repeated with the same key returns the invoice
   created the first time instead of creating another.

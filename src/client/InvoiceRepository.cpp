@@ -1,11 +1,13 @@
 #include <client/InvoiceRepository.h>
 #include <guita/v1/invoice_service.pb.h>
+#include <QUuid>
 
 namespace v1 = guita::v1;
 
 namespace {
 constexpr auto kList = "guita.v1.InvoiceService/ListInvoices";
 constexpr auto kCreate = "guita.v1.InvoiceService/CreateInvoice";
+constexpr auto kWatch = "guita.v1.InvoiceService/WatchInvoices";
 
 // The contract's strings are UTF-8
 InvoiceRow toRow(const v1::Invoice &invoice) {
@@ -27,10 +29,11 @@ void InvoiceRepository::create(const QString &customer, const QString &customerT
     if (!customerTaxId.isEmpty())
         request.set_customer_tax_id(customerTaxId.toStdString());
     request.set_total_cents(qint64(totalCents));
+    request.set_request_id(QUuid::createUuid().toString(QUuid::WithoutBraces).toStdString());
 
     m_connection->call<v1::CreateInvoiceResponse>(kCreate, request, this,
         [this](const v1::CreateInvoiceResponse &response) { emit created(toRow(response.invoice())); },
-        [this](const QString &error) { emit failed(error); });
+        [this](const QString &error) { emit failed(error); }, ApiConnection::Repeat::Safe);
 }
 
 void InvoiceRepository::list() {
@@ -43,5 +46,22 @@ void InvoiceRepository::list() {
                 rows.append(toRow(invoice));
             emit listed(rows);
         },
-        [this](const QString &error) { emit failed(error); });
+        [this](const QString &error) { emit failed(error); }, ApiConnection::Repeat::Safe);
+}
+
+void InvoiceRepository::watch() {
+    if (!m_connection || m_watching) return;
+    m_watching = true;
+    m_connection->subscribe<v1::WatchInvoicesResponse>(kWatch, v1::WatchInvoicesRequest(), this,
+        [this](const v1::WatchInvoicesResponse &event) {
+            switch (event.event_case()) {
+            case v1::WatchInvoicesResponse::kStarted: emit watching(); break;
+            case v1::WatchInvoicesResponse::kCreated: emit invoiceCreated(toRow(event.created())); break;
+            default: break;      // an event of a later version
+            }
+        },
+        [this](const QString &error) {
+            m_watching = false;
+            emit failed(error);
+        });
 }
