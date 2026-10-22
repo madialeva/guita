@@ -242,6 +242,18 @@ Sobre `QWebSocket`, en el hilo de la interfaz y sin esperas bloqueantes, como ex
 
   Se documenta en §4.5 junto con el tamaño de `client.wasm` antes y después (Qt WebSockets entra y `QNetworkAccessManager` deja de usarse).
 
+### 12. Teclas muertas en el cliente web
+
+Hallado en la verificación visual: en el cliente web no se pueden escribir tildes con la tecla muerta (´ y después e en un teclado español), aunque una «é» que llega directamente sí entra. No lo introduce este cambio: es el tratamiento del teclado de Qt 6.12 para WebAssembly, igual en las ramas `6.12` y `dev` de Qt.
+
+- **Causa**, comprobada registrando los eventos de Chrome y leyendo `qwasmwindow.cpp` y `qwasminputcontext.cpp` de Qt 6.12.0:
+  - Chrome envía `keydown` con `key="Dead"`, después `keydown` con `key="e"` y por último un evento `input` con el texto compuesto, «é»;
+  - Qt traduce el `keydown` de la tecla muerta por su posición física, con una tabla para teclados de EE. UU. y Mac, donde no está la tecla ´ del español (`BracketLeft`): la pierde;
+  - Qt procesa el `keydown` de la «e», la inserta y marca el siguiente `input` para ignorarlo, que es justo el que trae la «é».
+- **Corrección** en `src/client/WebKeyboard.{h,cpp}`, solo para WASM e instalada por `main.cpp` al arrancar: un escuchador de `keydown` en la fase de captura de `window`, que se ejecuta antes que los de Qt. Solo actúa mientras el foco está en el `<input>` oculto con el que Qt recibe el texto, es decir, con un campo de texto de Qt enfocado. Ni la tecla muerta ni la tecla con carácter que la sigue llegan a Qt (`stopImmediatePropagation()`, sin `preventDefault()`), así que el navegador inserta el texto compuesto y su evento `input` llega al contexto de entrada de Qt, que lo inserta. Las teclas sin carácter (Retroceso, flechas, atajos con Ctrl) y las de una composición de un método de entrada (`isComposing`, `keyCode` 229, que Qt ya trata) siguen igual.
+  - *Alternativas*: llevar todo el texto por el evento `input`, no solo el que sigue a una tecla muerta (cambia el camino de cada tecla y arriesga más); una página propia en lugar de la que genera Qt (más superficie que mantener para unas líneas de JavaScript); esperar a una corrección de Qt (no la hay).
+- **Comprobación**: `tests/web/dead-keys.mjs` escribe, con el protocolo de depuración de Chrome, la misma secuencia de eventos que un teclado español real (las teclas muertas sintéticas de `xdotool` no son fiables), en un Chrome sobre Xvfb con el cliente web abierto y un campo enfocado. Queda fuera de `ctest`, que solo ejecuta pruebas nativas, y sirve para saber cuándo Qt lo corrige y la corrección puede retirarse.
+
 ## Risks / Trade-offs
 
 - [Un hilo de cpp-httplib, uno de *ping* y uno escritor por canal] → Límite explícito de canales (decisión 6), pool de HTTP dimensionado aparte, y documentado en §11 y §12; cambiar a un servidor de bucle de eventos solo toca `WebSocketRpcTransport`.
@@ -255,6 +267,7 @@ Sobre `QWebSocket`, en el hilo de la interfaz y sin esperas bloqueantes, como ex
 - [Cerrar el servidor con canales abiertos podría colgarse] → `Backend::stop()` cierra las sesiones antes de parar el servidor; una prueba lo cubre con un plazo.
 - [La clave reutilizada con otros datos se detecta comparando campos] → Basta para `CreateInvoice`; si una operación futura no se puede comparar, se guardará un *hash* de la petición con la clave.
 - [Cambiar el script de Qt invalida la caché del CI] → Una sola reinstalación, prevista en #4; el PR la valida.
+- [La corrección de las teclas muertas depende de cómo trata Qt 6.12 los eventos del teclado] → Es una sola función, solo en WASM y documentada; al cambiar de versión de Qt se repite `tests/web/dead-keys.mjs` con y sin ella.
 - [Retirar `HttpTransport` del cliente] → El API HTTP sigue en el servidor y su suite (`rpcapi`); volver a un cliente HTTP sería otro `ApiTransport`.
 
 ## Migration Plan

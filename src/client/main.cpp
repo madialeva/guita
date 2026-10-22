@@ -8,6 +8,10 @@
 #include <QTranslator>
 #include <memory>
 
+#ifdef Q_OS_WASM
+#include <client/WebKeyboard.h>
+#endif
+
 #ifdef APP_STANDALONE_SUPPORT
 #include <backend/api/Backend.h>
 #include <client/InProcTransport.h>
@@ -16,6 +20,10 @@
 
 int main(int argc, char *argv[]) {
     QGuiApplication app(argc, argv);
+#ifdef Q_OS_WASM
+    // Accents typed with dead keys (é: ´ then e) in the text fields
+    installDeadKeyHandling();
+#endif
     QCoreApplication::setOrganizationName("guita");
     QCoreApplication::setApplicationName("guita");
 

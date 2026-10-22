@@ -555,7 +555,7 @@ without loading any view.
 
 ### 5.3 Platform-specific pieces
 
-Only two pieces differ between native and WASM:
+Only three pieces differ between native and WASM:
 
 - `ApiConfig.h`: in WASM the channel is at the page's host +
   `/api/channel`, `wss://` behind `https://` (same origin, so no CORS);
@@ -563,6 +563,31 @@ Only two pieces differ between native and WASM:
   `http://127.0.0.1:8090/api/`, so `ws://127.0.0.1:8090/api/channel`).
 - `main.cpp` and `InProcTransport`: standalone support (`APP_STANDALONE_SUPPORT`,
   defined only on native builds) embeds the backend and calls it in process.
+- `WebKeyboard.cpp` (WASM only, installed by `main.cpp`): accents typed with
+  dead keys. On a Spanish keyboard "é" is the dead key ´ and then e: the
+  browser sends a `keydown` "Dead", a `keydown` "e" and an `input` event with
+  the composed "é". Qt 6.12 for WebAssembly maps dead keys by their physical
+  position for US and Mac layouts only, so it loses the Spanish one, inserts
+  the "e" and drops the `input` event that carries the "é" ("Pérez" comes out
+  as "Perez"). A `keydown` listener in the capture phase of `window`, which
+  runs before Qt's, acts only while a Qt text field has focus (Qt then
+  receives text through a hidden `<input>`): it keeps the dead key and the
+  character key after it from reaching Qt, without cancelling them, so the
+  browser inserts the composed text and Qt's input context takes it from the
+  `input` event. Keys without a character (Backspace, arrows, Ctrl shortcuts)
+  and input method compositions, which Qt handles, pass through.
+
+  `tests/web/dead-keys.mjs` checks it by hand, outside `ctest`: it types,
+  through Chrome's DevTools protocol, the very events a Spanish keyboard sends
+  for "Pérez á´´xn" (synthetic dead keys from `xdotool` are not reliable), and
+  the focused field must show exactly that. Repeat it when Qt is upgraded, to
+  know whether the workaround is still needed:
+
+  ```sh
+  google-chrome --remote-debugging-port=9222 http://127.0.0.1:8090/
+  # click a text field of the client, then
+  node tests/web/dead-keys.mjs             # Node.js 22 or later
+  ```
 
 ### 5.4 Internationalization
 
@@ -632,6 +657,8 @@ mode self-contained, without external services.
 | libpq, zlib | system | system development packages |
 | PostgreSQL | 17 tested | system |
 
+- Node.js 22 or later is needed only for the manual check of the web
+  client's dead keys, `tests/web/dead-keys.mjs` (§5.3).
 - The scripts install the non-system dependencies (Qt, emsdk, libpqxx,
   cpp-httplib, protobuf, buf) without root privileges under `$SOFTWARE_DIR` (default
   `~/software`), which is where the CMake presets look for them; with other
@@ -719,6 +746,8 @@ comes from the system or the package.
 
 All tests use Qt Test, and Qt Quick Test for QML logic, and are registered in
 CTest; they are native only and run headless (`QT_QPA_PLATFORM=offscreen`).
+The web client's handling of dead keys is checked by hand with
+`tests/web/dead-keys.mjs` (§5.3).
 The backend tests link Qt only in their own executables: `core`, `api` and
 `server` stay Qt-free.
 

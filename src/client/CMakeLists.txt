@@ -19,6 +19,11 @@ qt_add_translations(TARGETS client
     TS_FILE_BASE guita
     TS_FILE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/translations)
 
+if(EMSCRIPTEN)
+    # The web client's handling of dead keys (Qt 6.12 for WebAssembly loses them)
+    target_sources(client PRIVATE WebKeyboard.h WebKeyboard.cpp)
+endif()
+
 if(NOT EMSCRIPTEN)
     # Standalone mode embeds the backend and calls it in process. The client
     # only includes backend/api/Backend.h, which keeps the backend libraries private

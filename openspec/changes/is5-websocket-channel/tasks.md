@@ -86,14 +86,20 @@
 - [x] 7.1 Añadir a `tests/bench/latency_bench.cpp` el canal real (`WebSocketRpcTransport` + `RpcRouter` con el procedimiento sin base de datos) con `ws::WebSocketClient` y el sobre, y con `WebSocketTransport` de Qt; verificar que da resultados estables entre dos ejecuciones y que ninguna ida y vuelta del cliente Qt se acerca a los 40 ms (si lo hace, activar `TCP_NODELAY` en el cliente y repetir)
 - [x] 7.2 Medir el tamaño de `client.wasm` antes y después del cambio; documentar en `docs/architecture.md` §4.5 las filas nuevas, el tamaño y la lectura, y en §11 el servidor de bucle de eventos como trabajo pendiente; verificar que las órdenes de §4.5 funcionan tal cual
 
-## 8. Integración
+## 8. Tildes en el cliente web
 
-- [ ] 8.1 Ejecutar `ctest --preset native -j8` completo y `scripts/check-contract.sh`; verificar que todo pasa
-- [ ] 8.2 Verificar en Xvfb, con `scripts/run-server.sh` y `API_TOKEN`:
+- [x] 8.1 Crear `tests/web/dead-keys.mjs`, que escribe por el protocolo de depuración de Chrome lo que manda un teclado español para «Pérez á´´xn» (teclas muertas incluidas), y reproducir con él el fallo en el cliente web actual, en Chrome sobre Xvfb; verificar que el campo muestra «Perez a xn»
+- [x] 8.2 Crear `src/client/WebKeyboard.{h,cpp}` (solo WASM, decisión 12 del diseño) e instalarlo desde `main.cpp`; verificar que el cliente compila en nativo y en WASM, y que con el script el campo muestra «Pérez á´´xn», que `Ctrl+A` y Retroceso siguen funcionando y que la factura guardada coincide con lo que se ve
+- [x] 8.3 Documentar la corrección y su comprobación en `docs/architecture.md` (§5.3 y §10) y en AGENTS.md (`main.cpp`); verificar que las órdenes documentadas funcionan tal cual
+
+## 9. Integración
+
+- [ ] 9.1 Ejecutar `ctest --preset native -j8` completo y `scripts/check-contract.sh`; verificar que todo pasa
+- [ ] 9.2 Verificar en Xvfb, con `scripts/run-server.sh` y `API_TOKEN`:
   - dos clientes conectados: la factura creada en uno aparece en el otro sin tocarlo;
-  - el cliente web (WASM) en Chrome igual, junto a uno de escritorio;
+  - el cliente web (WASM) en Chrome igual, junto a uno de escritorio, con tildes escritas con teclas muertas;
   - al reiniciar el servidor, los clientes muestran el aviso, reconectan solos y siguen recibiendo eventos;
   - en standalone la lista se actualiza con los eventos y `ss` no muestra ningún puerto en escucha.
 
   Dejar el build compilado para la verificación visual del usuario
-- [ ] 8.3 Tras subir el usuario la rama y abrir el PR, verificar que el CI reinstala la toolchain con Qt WebSockets una vez, guarda la caché y termina en verde, con `check-contract.sh` incluido
+- [ ] 9.3 Tras subir el usuario la rama y abrir el PR, verificar que el CI reinstala la toolchain con Qt WebSockets una vez, guarda la caché y termina en verde, con `check-contract.sh` incluido

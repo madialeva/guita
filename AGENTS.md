@@ -173,8 +173,10 @@ context properties, `qmlRegister*` calls or objects injected from `main.cpp`:
   property), never `var`, so `qmllint` checks every access. `client_qmllint`
   must stay clean.
 - `main.cpp` only installs the translator, handles the command-line flags,
-  starts the embedded backend in standalone mode, configures `ApiConnection`
-  and loads `Main`; no wiring between C++ objects and views lives there.
+  starts the embedded backend in standalone mode, installs the web client's
+  dead-key handling (`WebKeyboard`, WASM only: Qt 6.12 for WebAssembly loses
+  accents typed with dead keys), configures `ApiConnection` and loads `Main`;
+  no wiring between C++ objects and views lives there.
 - Everything in the client is asynchronous (signals, callbacks): WASM forbids
   blocking waits and nested `QEventLoop::exec()`.
 
@@ -205,6 +207,9 @@ context properties, `qmlRegister*` calls or objects injected from `main.cpp`:
   `scripts/setup-qt.sh --desktop-only` and `scripts/build-deps.sh`, cached on
   the hash of both scripts. A new system dependency also goes to the
   workflow's `apt` list; it is described in `docs/architecture.md` §10.4.
+- `tests/web/dead-keys.mjs` checks by hand, outside `ctest`, that the web
+  client composes accents typed with dead keys (`docs/architecture.md` §5.3);
+  repeat it when Qt is upgraded.
 - Measurements live in `tests/bench`, outside `ctest`: built in Release with
   the `bench` and `wasm-bench` presets; their results are documented in
   `docs/architecture.md` (§4.5) and are refreshed when what they measure changes.
