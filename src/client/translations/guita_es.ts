@@ -4,7 +4,7 @@
 <context>
     <name>ApiConnection</name>
     <message>
-        <location filename="../ApiConnection.h" line="55"/>
+        <location filename="../ApiConnection.h" line="61"/>
         <source>Unexpected response from the backend</source>
         <translation>Respuesta inesperada del backend</translation>
     </message>
@@ -37,44 +37,62 @@
         <translation>Factura %1 guardada</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="45"/>
+        <location filename="../Main.qml" line="49"/>
         <source>%1 mode · in process</source>
         <translation>Modo %1 · en el proceso</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="53"/>
+        <location filename="../Main.qml" line="57"/>
+        <source>No connection to the backend: reconnecting…</source>
+        <translation>No hay conexión con el backend: reconectando…</translation>
+    </message>
+    <message>
+        <location filename="../Main.qml" line="65"/>
         <source>Customer</source>
         <translation>Cliente</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="54"/>
+        <location filename="../Main.qml" line="66"/>
         <source>Tax ID</source>
         <translation>NIF</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="57"/>
+        <location filename="../Main.qml" line="69"/>
         <source>Total</source>
         <translation>Total</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="66"/>
+        <location filename="../Main.qml" line="78"/>
         <source>The total must be an amount such as 1234.50</source>
         <translation>El total debe ser un importe como 1234,50</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="34"/>
+        <location filename="../Main.qml" line="38"/>
         <source>Error: %1</source>
         <translation>Error: %1</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="46"/>
+        <location filename="../Main.qml" line="50"/>
         <source>%1 mode · %2</source>
         <translation>Modo %1 · %2</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="62"/>
+        <location filename="../Main.qml" line="74"/>
         <source>Save</source>
         <translation>Guardar</translation>
+    </message>
+</context>
+<context>
+    <name>WebSocketTransport</name>
+    <message>
+        <location filename="../WebSocketTransport.cpp" line="35"/>
+        <source>Backend unavailable</source>
+        <translation>Backend no disponible</translation>
+    </message>
+    <message>
+        <location filename="../WebSocketTransport.cpp" line="145"/>
+        <source>Connection to the backend lost</source>
+        <translation>Se ha perdido la conexión con el backend</translation>
     </message>
 </context>
 <context>

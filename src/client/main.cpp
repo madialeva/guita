@@ -1,12 +1,16 @@
 #include <client/ApiConfig.h>
 #include <client/ApiConnection.h>
-#include <client/HttpTransport.h>
+#include <client/WebSocketTransport.h>
 #include <QCommandLineParser>
 #include <QGuiApplication>
 #include <QLocale>
 #include <QQmlApplicationEngine>
 #include <QTranslator>
 #include <memory>
+
+#ifdef Q_OS_WASM
+#include <client/WebKeyboard.h>
+#endif
 
 #ifdef APP_STANDALONE_SUPPORT
 #include <backend/api/Backend.h>
@@ -16,6 +20,10 @@
 
 int main(int argc, char *argv[]) {
     QGuiApplication app(argc, argv);
+#ifdef Q_OS_WASM
+    // Accents typed with dead keys (é: ´ then e) in the text fields
+    installDeadKeyHandling();
+#endif
     QCoreApplication::setOrganizationName("guita");
     QCoreApplication::setApplicationName("guita");
 
@@ -39,9 +47,10 @@ int main(int argc, char *argv[]) {
 #else
     const auto mode = ApiConnection::Connected;
 #endif
-    // Web / connected modes: HTTP, with the shared development token, if any
-    ApiConnection::Settings settings{mode, defaultApiBaseUrl(),
-                                     std::make_shared<HttpTransport>(defaultApiBaseUrl(), qgetenv("API_TOKEN"))};
+    // Web / connected modes: the persistent channel, with the shared
+    // development token, if any
+    ApiConnection::Settings settings{mode, defaultChannelUrl(),
+                                     std::make_shared<WebSocketTransport>(defaultChannelUrl(), qgetenv("API_TOKEN"))};
 
 #ifdef APP_STANDALONE_SUPPORT
     // Destroyed when main returns, after the QML engine (and with it the

@@ -14,8 +14,16 @@ void toMessage(const Invoice &invoice, v1::Invoice &message) {
 }
 }
 
-// Called concurrently by the transports: InvoiceService is thread-safe
-void addInvoiceProcedures(RpcRouter &router, InvoiceService &service) {
+InvoiceService::CreatedHandler publishCreatedInvoices(InvoiceEvents &events) {
+    return [&events](const Invoice &invoice) {
+        v1::WatchInvoicesResponse event;
+        toMessage(invoice, *event.mutable_created());
+        events.publish(event);
+    };
+}
+
+// Called concurrently by the transports: InvoiceService and the topic are thread-safe
+void addInvoiceProcedures(RpcRouter &router, InvoiceService &service, InvoiceEvents &events) {
     router.add<v1::ListInvoicesRequest, v1::ListInvoicesResponse>(
         "guita.v1.InvoiceService/ListInvoices", [&service](const v1::ListInvoicesRequest &) {
             v1::ListInvoicesResponse response;
@@ -30,9 +38,22 @@ void addInvoiceProcedures(RpcRouter &router, InvoiceService &service) {
                                request.has_customer_tax_id()
                                    ? std::optional<std::string>(request.customer_tax_id())
                                    : std::nullopt,
-                               request.total_cents()};
+                               request.total_cents(),
+                               request.request_id().empty()
+                                   ? std::nullopt
+                                   : std::optional<std::string>(request.request_id())};
             v1::CreateInvoiceResponse response;
             toMessage(service.create(std::move(invoice)), *response.mutable_invoice());
             return response;
+        });
+
+    // "started" first, under the topic's lock, so that no invoice can arrive
+    // before it; from then on, every committed invoice
+    router.addStream<v1::WatchInvoicesRequest, v1::WatchInvoicesResponse>(
+        "guita.v1.InvoiceService/WatchInvoices",
+        [&events](const v1::WatchInvoicesRequest &, std::function<void(const v1::WatchInvoicesResponse &)> send) {
+            v1::WatchInvoicesResponse started;
+            started.mutable_started();
+            return events.subscribe(std::move(send), std::move(started));
         });
 }

@@ -28,8 +28,12 @@ ApplicationWindow {
         onCreated: (invoice) => {
             status.text = qsTr("Invoice %1 saved").arg(invoice.id)
             customer.text = ""; customerTaxId.text = ""; total.text = ""
-            invoices.list()
         }
+        // The list follows the events: reloaded when watching starts (also
+        // after a reconnection, which may have missed some) and on every
+        // invoice created, here or by another client
+        onWatching: invoices.list()
+        onInvoiceCreated: invoices.list()
         onListed: (rows) => list.model = rows
         onFailed: (message) => status.text = qsTr("Error: %1").arg(message)
     }
@@ -43,9 +47,17 @@ ApplicationWindow {
             // In process there is no URL: the backend runs inside the application
             text: ApiConnection.mode === ApiConnection.Standalone
                   ? qsTr("%1 mode · in process").arg(window.modeName)
-                  : qsTr("%1 mode · %2").arg(window.modeName).arg(ApiConnection.baseUrl)
+                  : qsTr("%1 mode · %2").arg(window.modeName).arg(ApiConnection.url)
             opacity: 0.6
             font.pixelSize: 12
+        }
+
+        Label {
+            visible: !ApiConnection.available
+            text: qsTr("No connection to the backend: reconnecting…")
+            color: "firebrick"
+            Layout.fillWidth: true
+            wrapMode: Text.Wrap
         }
 
         RowLayout {
@@ -101,5 +113,5 @@ ApplicationWindow {
         }
     }
 
-    Component.onCompleted: invoices.list()
+    Component.onCompleted: invoices.watch()
 }

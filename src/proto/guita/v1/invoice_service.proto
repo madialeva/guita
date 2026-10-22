@@ -35,14 +35,38 @@ message CreateInvoiceRequest {
   optional string customer_tax_id = 2;
   // Between 0 and 999999999999 (numeric(12,2) in the database).
   int64 total_cents = 3;
+  // Idempotency key: a UUID chosen by the caller. A request repeated with the
+  // same key returns the invoice of the first one instead of creating
+  // another; reused with different data, it is rejected. Empty: no key.
+  string request_id = 4;
 }
 
 message CreateInvoiceResponse {
   Invoice invoice = 1;
 }
 
-// Invoices: list them and create new ones.
+message WatchInvoicesRequest {}
+
+// One event of WatchInvoices.
+message WatchInvoicesResponse {
+  oneof event {
+    // Always the first message: the subscription is in place, so every
+    // invoice committed from now on arrives as an event. Reload what is shown
+    // when it arrives, also after a reconnection, since earlier events may
+    // have been missed.
+    WatchStarted started = 1;
+    // An invoice created by any client, once its transaction is committed.
+    Invoice created = 2;
+  }
+}
+
+message WatchStarted {}
+
+// Invoices: list them, create new ones and watch the ones others create.
 service InvoiceService {
   rpc ListInvoices(ListInvoicesRequest) returns (ListInvoicesResponse);
   rpc CreateInvoice(CreateInvoiceRequest) returns (CreateInvoiceResponse);
+  // Events delivered at most once while subscribed, over the persistent
+  // channel or in process; not served over HTTP.
+  rpc WatchInvoices(WatchInvoicesRequest) returns (stream WatchInvoicesResponse);
 }

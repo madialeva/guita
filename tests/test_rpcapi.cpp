@@ -10,6 +10,8 @@
 #include <QtTest>
 #include <cstdint>
 #include <memory>
+#include <mutex>
+#include <vector>
 #include <optional>
 #include <string>
 
@@ -91,6 +93,69 @@ private slots:
         pqxx::nontransaction tx(connection);
         QVERIFY(tx.query_value<bool>("SELECT customer_tax_id IS NULL FROM invoices WHERE id = $1",
                                      pqxx::params{created.invoice().id()}));
+    }
+
+    void createsOnceWithARequestId() {
+        const auto request = create("Keyed S.L.", 7700, std::nullopt, kRequestId);
+        v1::CreateInvoiceResponse first, second;
+        auto res = post(kCreate, "application/proto", request);
+        QVERIFY(res);
+        QCOMPARE(res->status, 200);
+        QVERIFY(first.ParseFromString(res->body));
+        res = post(kCreate, "application/proto", request);
+        QVERIFY(res);
+        QCOMPARE(res->status, 200);
+        QVERIFY(second.ParseFromString(res->body));
+        QCOMPARE(second.invoice().id(), first.invoice().id());
+
+        pqxx::connection connection(m_db->connectionString());
+        pqxx::nontransaction tx(connection);
+        QCOMPARE(tx.query_value<int>("SELECT count(*) FROM invoices WHERE customer = 'Keyed S.L.'"), 1);
+    }
+
+    void rejectsAMalformedRequestId() {
+        const auto res = post(kCreate, "application/proto", create("Acme", 1, std::nullopt, "not-a-uuid"));
+        QVERIFY(res);
+        QCOMPARE(res->status, 400);
+        QCOMPARE(json(res).object().value("code").toString(), QStringLiteral("invalid_argument"));
+        QCOMPARE(json(res).object().value("message").toString(), QStringLiteral("request_id must be a UUID"));
+    }
+
+    void servesNoStreamsOverHttp() {
+        const auto res = post(kWatch, "application/proto", {});
+        QVERIFY(res);
+        QCOMPARE(res->status, 404);
+        QCOMPARE(json(res).object().value("code").toString(), QStringLiteral("unimplemented"));
+        QVERIFY(json(res).object().value("message").toString().contains(QStringLiteral("is a stream")));
+    }
+
+    void deliversEventsOfHttpCreationsInProcess() {
+        // An invoice created over HTTP reaches a subscriber of the same backend
+        std::mutex mutex;
+        std::vector<v1::WatchInvoicesResponse> events;
+        const auto subscription = m_backend->subscribe({kWatch, {}, std::string("Bearer ") + kToken},
+            [&](std::string payload) {
+                v1::WatchInvoicesResponse event;
+                QVERIFY(event.ParseFromString(payload));
+                std::lock_guard lock(mutex);
+                events.push_back(event);
+            });
+        QCOMPARE(subscription.result().code, RpcCode::Ok);
+
+        const auto res = post(kCreate, "application/proto", create("Watched S.L.", 990));
+        QVERIFY(res);
+        QCOMPARE(res->status, 200);
+        v1::CreateInvoiceResponse created;
+        QVERIFY(created.ParseFromString(res->body));
+
+        // Published before the response was written
+        std::lock_guard lock(mutex);
+        QCOMPARE(events.size(), size_t(2));
+        QCOMPARE(events[0].event_case(), v1::WatchInvoicesResponse::kStarted);
+        QCOMPARE(events[1].event_case(), v1::WatchInvoicesResponse::kCreated);
+        QCOMPARE(events[1].created().id(), created.invoice().id());
+        QCOMPARE(events[1].created().customer(), std::string("Watched S.L."));
+        QCOMPARE(events[1].created().total_cents(), 990);
     }
 
     void acceptsTheConnectProtocolHeader() {
@@ -210,6 +275,7 @@ private:
     static constexpr const char *kToken = "rpc-token";
     static constexpr const char *kList = "guita.v1.InvoiceService/ListInvoices";
     static constexpr const char *kCreate = "guita.v1.InvoiceService/CreateInvoice";
+    static constexpr const char *kWatch = "guita.v1.InvoiceService/WatchInvoices";
 
     static httplib::Headers auth() { return {{"Authorization", std::string("Bearer ") + kToken}}; }
 
@@ -217,13 +283,16 @@ private:
         return m_client->Post(std::string("/api/") + procedure, auth(), body, contentType);
     }
 
-    // A CreateInvoiceRequest; taxId absent unless given
+    static constexpr const char *kRequestId = "9b2f0c1e-5d43-4a8e-b6f7-0e1d2c3b4a59";
+
+    // A CreateInvoiceRequest; taxId absent and no request ID unless given
     static std::string create(const std::string &customer, std::int64_t totalCents,
-                              std::optional<std::string> taxId = std::nullopt) {
+                              std::optional<std::string> taxId = std::nullopt, const std::string &requestId = {}) {
         v1::CreateInvoiceRequest request;
         request.set_customer(customer);
         if (taxId) request.set_customer_tax_id(*taxId);
         request.set_total_cents(totalCents);
+        request.set_request_id(requestId);
         return request.SerializeAsString();
     }
 

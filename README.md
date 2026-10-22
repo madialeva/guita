@@ -32,6 +32,7 @@ Proof of concept (v0.1.0). See [CHANGELOG.md](CHANGELOG.md) for what each versio
 |:---:|---|
 | ✅ | Sample invoicing domain: create and list invoices, with exact money handling |
 | ✅ | Typed client–backend contract with Protobuf, served as RPC (Connect protocol) |
+| ✅ | Persistent WebSocket channel with server events and automatic reconnection |
 | ✅ | Backend without framework or ORM (cpp-httplib, libpqxx) |
 | ✅ | Automatic schema migrations on PostgreSQL |
 | ✅ | Web client (Qt Quick compiled to WebAssembly) served by the backend |
@@ -57,15 +58,18 @@ PR into `develop/vX.Y.Z`, each tracked by an issue and an OpenSpec change.
 
 | Mode | Client | Backend |
 |---|---|---|
-| Web | Qt/QML in the browser (WASM) | server, which also serves the web client |
-| Desktop connected | native Qt/QML | remote server |
+| Web | Qt/QML in the browser (WASM) | server, over a persistent channel; it also serves the web client |
+| Desktop connected | native Qt/QML | remote server, over a persistent channel |
 | Desktop standalone | native Qt/QML | backend embedded in the client process, called in process (no network) |
 
 The client always talks to the backend through a typed Protobuf contract and
-never knows which transport carries the calls: HTTP (RPC compatible with the
-Connect protocol) in the web and connected modes, a direct in-process call in
-standalone mode, which therefore opens no network port. All business logic
-lives in the backend. See
+never knows which transport carries the calls and the server's events: a
+persistent WebSocket channel in the web and connected modes, which reconnects
+on its own, and a direct in-process call in standalone mode, which therefore
+opens no network port. When a client creates an invoice, the others refresh
+their list. The server also serves the contract over HTTP (RPC compatible
+with the Connect protocol) for tools. All business logic lives in the
+backend. See
 [docs/architecture.md](docs/architecture.md) for the technical details.
 
 ## Requirements
@@ -86,8 +90,8 @@ lives in the backend. See
 | buf | 1.74 | contract style and compatibility checks |
 | libpq and zlib development files | — | libpqxx, cpp-httplib |
 
-Both Qt kits need Qt Quick, Qt Quick Controls, Qt Network, the Linguist tools
-and the `qttasktree` module.
+Both Qt kits need Qt Quick, Qt Quick Controls, Qt WebSockets, the Linguist
+tools and the `qttasktree` module.
 
 ### To run
 
@@ -184,8 +188,8 @@ takes the request in JSON and prints the response in JSON, and `protoc
 --encode`/`--decode` convert between Protobuf's text format and binary (see
 [docs/architecture.md](docs/architecture.md), §4.3).
 
-The server reads `DB_CONN`, `HTTP_ADDRESS`, `HTTP_PORT`, `DOCROOT` and
-`API_TOKEN` from the environment. Until user authentication exists, `API_TOKEN`
+The server reads `DB_CONN`, `HTTP_ADDRESS`, `HTTP_PORT`, `DOCROOT`,
+`WS_MAX_CHANNELS` and `API_TOKEN` from the environment. Until user authentication exists, `API_TOKEN`
 is an optional shared Bearer token for development (leave it empty for the web
 client); the standalone client needs none, since it opens no network port.
 

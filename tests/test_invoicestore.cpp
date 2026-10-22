@@ -6,9 +6,11 @@
 #include <pqxx/pqxx>
 #include <QtTest>
 #include <memory>
+#include <stdexcept>
+#include <string>
 
 // SQL of invoices: exact money conversion between cents and numeric(12,2),
-// nullable tax ID and listing order.
+// nullable tax ID, listing order and request IDs (idempotency keys).
 class InvoiceStoreTest : public QObject {
     Q_OBJECT
 
@@ -80,14 +82,49 @@ private slots:
             QCOMPARE(invoice.version, 0);
     }
 
+    void insertsNothingForAUsedRequestId() {
+        const std::string key = "123e4567-e89b-12d3-a456-426614174000";
+        const auto first = insert({"Acme", std::nullopt, 100, key});
+
+        // The same key inserts nothing, whatever the data
+        const auto second = m_db->inTransaction([&](pqxx::work &tx) {
+            return InvoiceStore(tx).insert({"Other", std::nullopt, 200, key});
+        });
+        QVERIFY(!second);
+        QCOMPARE(list().size(), size_t(1));
+
+        const auto found = m_db->inTransaction([&](pqxx::work &tx) { return InvoiceStore(tx).byRequestId(key); });
+        QVERIFY(found);
+        QCOMPARE(found->id, first.id);
+        QCOMPARE(found->customer, std::string("Acme"));
+        QCOMPARE(found->totalCents, 100);
+    }
+
+    void findsNoInvoiceForAnUnusedRequestId() {
+        insert({"Acme", std::nullopt, 100, std::string("123e4567-e89b-12d3-a456-426614174000")});
+        const auto found = m_db->inTransaction([](pqxx::work &tx) {
+            return InvoiceStore(tx).byRequestId("00000000-0000-0000-0000-000000000000");
+        });
+        QVERIFY(!found);
+    }
+
+    void insertsEveryInvoiceWithoutRequestId() {
+        insert({"Acme", std::nullopt, 100});
+        insert({"Acme", std::nullopt, 100});
+        QCOMPARE(list().size(), size_t(2));
+    }
+
     void cleanupTestCase() {
         m_db.reset();
         m_testDb.reset();
     }
 
 private:
+    // An insert that must create the invoice
     Invoice insert(const NewInvoice &invoice) {
-        return m_db->inTransaction([&](pqxx::work &tx) { return InvoiceStore(tx).insert(invoice); });
+        const auto created = m_db->inTransaction([&](pqxx::work &tx) { return InvoiceStore(tx).insert(invoice); });
+        if (!created) throw std::runtime_error("insert() created no invoice");
+        return *created;
     }
 
     std::vector<Invoice> list() {

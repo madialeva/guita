@@ -1,3 +1,4 @@
+#include <guita/channel/v1/channel.pb.h>
 #include <guita/v1/invoice_service.pb.h>
 #include <support/ProtoSamples.h>
 #include <QCoreApplication>
@@ -17,6 +18,7 @@
 // client (to QVariantList) with the binary one. Runs natively and in
 // WebAssembly, after checking the reference bytes of tests/support/ProtoSamples.h.
 namespace v1 = guita::v1;
+namespace channel = guita::channel::v1;
 
 namespace {
 v1::ListInvoicesResponse makeInvoices(int count) {
@@ -78,7 +80,18 @@ bool checkReferenceBytes() {
                  && unchanged<v1::CreateInvoiceRequest>(kCreateInvoiceRequestEmptyTaxId)
                  && unchanged<v1::CreateInvoiceRequest>(kCreateInvoiceRequestNegative)
                  && unchanged<v1::CreateInvoiceResponse>(kCreateInvoiceResponse)
-                 && unchanged<v1::ListInvoicesResponse>(kListInvoicesResponseLimits);
+                 && unchanged<v1::ListInvoicesResponse>(kListInvoicesResponseLimits)
+                 && unchanged<v1::CreateInvoiceRequest>(kCreateInvoiceRequestWithRequestId)
+                 && unchanged<v1::WatchInvoicesResponse>(kWatchInvoicesStarted)
+                 && unchanged<v1::WatchInvoicesResponse>(kWatchInvoicesCreated)
+                 && unchanged<channel::ClientFrame>(kClientHello)
+                 && unchanged<channel::ClientFrame>(kClientCall)
+                 && unchanged<channel::ClientFrame>(kClientCancel)
+                 && unchanged<channel::ServerFrame>(kServerWelcome)
+                 && unchanged<channel::ServerFrame>(kServerReply)
+                 && unchanged<channel::ServerFrame>(kServerReplyError)
+                 && unchanged<channel::ServerFrame>(kServerStreamMessage)
+                 && unchanged<channel::ServerFrame>(kServerGoodbye);
     if (ok)
         qInfo("Protobuf reference bytes: identical");
     else

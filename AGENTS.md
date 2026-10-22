@@ -13,15 +13,19 @@ and keep it up to date when they change.
 
 | Mode | Client | Backend |
 |---|---|---|
-| Web | Qt/QML compiled to WebAssembly | remote `server`, which also serves the WASM files |
-| Desktop connected | native Qt/QML | remote `server` (`API_URL`) |
+| Web | Qt/QML compiled to WebAssembly | remote `server` over the persistent channel; it also serves the WASM files |
+| Desktop connected | native Qt/QML | remote `server` (`API_URL`) over the persistent channel |
 | Desktop standalone | native Qt/QML (`--standalone`) | backend embedded in the client process, called in process: no network, no port, no token |
 
 Principles that every change must keep:
 
 - The client always talks to the backend through the RPC contract and never
-  knows which transport carries the calls: HTTP in the web and connected modes,
-  in process in standalone mode. No shortcut skips the contract.
+  knows which transport carries the calls and the server's events: the
+  persistent WebSocket channel in the web and connected modes, in process in
+  standalone mode. No shortcut skips the contract. The server also serves the
+  contract over HTTP (Connect) for tools such as `buf curl`.
+- There is a single server, without horizontal scaling: server events are
+  produced and delivered within one process.
 - All business logic lives in the backend (`src/backend/`); the client only
   presents and validates for user experience. The backend repeats every
   critical validation: the WASM client is in the user's hands.
@@ -85,6 +89,9 @@ QTP0004). Executables are written to `build/<preset>/bin`.
   request and one response message per method (`<Method>Request`,
   `<Method>Response`). Before a version is released anything may change; after
   it, incompatible changes go to a new package (`guita.v2`).
+- Every method that creates or modifies has a `string request_id` field, an
+  idempotency key (a UUID; empty means none), so a client may send it again
+  after a lost connection without applying it twice.
 - `buf lint` and `buf format` (CTest `contract_lint`, `contract_format`) keep
   the style. Every change to `src/proto` also runs `scripts/check-contract.sh`
   (`buf breaking` with the `WIRE_JSON` rules against the development branch,
@@ -113,6 +120,11 @@ QTP0004). Executables are written to `build/<preset>/bin`.
   32-bit).
 - Optimistic locking is explicit: updates check and increment `version`
   (`WHERE id = $1 AND version = $2`) and treat zero affected rows as a conflict.
+- Every operation that creates or modifies takes a `request_id` (a UUID chosen
+  by the caller) and is idempotent: the backend keeps the key with the data in
+  the same transaction as the operation (`invoices.request_id`, unique, with
+  `ON CONFLICT DO NOTHING`), returns the first result for a repeated request
+  and rejects the key with different data.
 - Procedures are registered per service on `RpcRouter`
   (`addInvoiceProcedures()`) with `add<Request, Response>()`, which checks at
   startup that the types are the method's (`<Method>Request`,
@@ -121,7 +133,13 @@ QTP0004). Executables are written to `build/<preset>/bin`.
   receive decoded messages, convert them to and from `core`'s structs and
   throw `std::invalid_argument` for validation errors; the router turns
   exceptions into Connect codes. Neither handlers nor `core` know the
-  transport: HTTP statuses exist only in `HttpRpcTransport`.
+  transport: HTTP statuses exist only in `HttpRpcTransport`, and WebSocket
+  frames and close codes only in `WebSocketRpcTransport` (the persistent
+  channel at `/api/channel`, frames of `guita.channel.v1`).
+- Server events are stream procedures (`addStream<Request, Response>()`),
+  fed by an `EventTopic` that `core` reaches only through a plain C++
+  notification after commit. Subscribers of a topic must not block: the
+  channel and the in-process transport only queue the message.
 - `backend/api/Backend.h` must not include cpp-httplib, libpqxx or protobuf
   (pimpl): the client only needs that interface to embed the backend.
 - Authentication is a shared Bearer token for now (random per launch in
@@ -136,13 +154,18 @@ context properties, `qmlRegister*` calls or objects injected from `main.cpp`:
 
 - Per-view objects (repositories, controllers) use `QML_ELEMENT` and are
   instantiated by the view that owns them (`Main.qml` creates `InvoiceRepository`).
-  Repositories call procedures through `ApiConnection::call<Response>()` with
-  the contract's messages and hand the views typed value types
-  (`InvoiceRow`, `QML_VALUE_TYPE`), never `QVariantMap`.
-- `ApiConnection` delegates to an `ApiTransport`: `HttpTransport`
-  (`QNetworkAccessManager`, binary Connect RPC) or `InProcTransport` (native
-  only: `Backend::call()` on a pool thread, results back through the event
-  queue; its destructor waits for the calls in flight). Neither is visible to QML.
+  Repositories call procedures through `ApiConnection::call<Response>()` and
+  subscribe to events through `ApiConnection::subscribe<Response>()` with the
+  contract's messages, and hand the views typed value types (`InvoiceRow`,
+  `QML_VALUE_TYPE`), never `QVariantMap`. Only reads and operations with a
+  `request_id` pass `Repeat::Safe`, which lets the transport send them again
+  after a lost connection.
+- `ApiConnection` delegates to an `ApiTransport`: `WebSocketTransport` (Qt
+  WebSockets, the persistent channel, with reconnection) or `InProcTransport`
+  (native only: `Backend::call()` on a pool thread and `Backend::subscribe()`,
+  results and events back through the event queue; its destructor ends the
+  subscriptions and waits for the calls in flight). Neither is visible to QML;
+  `ApiConnection.available` tells the views whether the backend is reachable.
 - Application-wide services are `QML_SINGLETON` with a static `create()`
   (`ApiConnection`). Qt prefers a default constructor over `create()`, so such
   a class must not be default-constructible.
@@ -150,8 +173,10 @@ context properties, `qmlRegister*` calls or objects injected from `main.cpp`:
   property), never `var`, so `qmllint` checks every access. `client_qmllint`
   must stay clean.
 - `main.cpp` only installs the translator, handles the command-line flags,
-  starts the embedded backend in standalone mode, configures `ApiConnection`
-  and loads `Main`; no wiring between C++ objects and views lives there.
+  starts the embedded backend in standalone mode, installs the web client's
+  dead-key handling (`WebKeyboard`, WASM only: Qt 6.12 for WebAssembly loses
+  accents typed with dead keys), configures `ApiConnection` and loads `Main`;
+  no wiring between C++ objects and views lives there.
 - Everything in the client is asynchronous (signals, callbacks): WASM forbids
   blocking waits and nested `QEventLoop::exec()`.
 
@@ -182,6 +207,9 @@ context properties, `qmlRegister*` calls or objects injected from `main.cpp`:
   `scripts/setup-qt.sh --desktop-only` and `scripts/build-deps.sh`, cached on
   the hash of both scripts. A new system dependency also goes to the
   workflow's `apt` list; it is described in `docs/architecture.md` §10.4.
+- `tests/web/dead-keys.mjs` checks by hand, outside `ctest`, that the web
+  client composes accents typed with dead keys (`docs/architecture.md` §5.3);
+  repeat it when Qt is upgraded.
 - Measurements live in `tests/bench`, outside `ctest`: built in Release with
   the `bench` and `wasm-bench` presets; their results are documented in
   `docs/architecture.md` (§4.5) and are refreshed when what they measure changes.
@@ -216,6 +244,7 @@ The PostgreSQL schema is owned and versioned by this project through numbered
 migrations in `src/backend/core/Migrations.cpp`, applied at startup by both the server and
 standalone mode inside one transaction guarded by `pg_advisory_xact_lock`.
 Never edit a released migration; add a new one (one statement per migration).
+Until the first release the migrations may still change.
 Table and column names are English `snake_case`; every table has a
 `bigserial` `id` and an integer `version` for optimistic locking. The contract's field names are
 English `snake_case` (lowerCamelCase in its JSON encoding); treat the contract as public once released.

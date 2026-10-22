@@ -12,7 +12,8 @@ const std::vector<std::pair<int, std::string_view>> kMigrations = {
             version         integer       NOT NULL,
             customer        text          NOT NULL,
             customer_tax_id text,
-            total           numeric(12,2) NOT NULL CHECK (total >= 0)
+            total           numeric(12,2) NOT NULL CHECK (total >= 0),
+            request_id      uuid          UNIQUE
         ))sql"},
     // {2, "ALTER TABLE ..."},
 };

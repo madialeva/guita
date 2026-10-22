@@ -18,4 +18,17 @@ ApiConnection *ApiConnection::create(QQmlEngine *, QJSEngine *) {
 }
 
 ApiConnection::ApiConnection(Settings settings, QObject *parent)
-    : QObject(parent), m_settings(std::move(settings)) {}
+    : QObject(parent), m_settings(std::move(settings)) {
+    if (!m_settings.transport) return;
+    m_settings.transport->setAvailabilityHandler([this](bool available) {
+        if (available == m_available) return;
+        m_available = available;
+        emit availableChanged();
+    });
+}
+
+ApiConnection::~ApiConnection() {
+    // The transport may outlive the connection
+    if (m_settings.transport)
+        m_settings.transport->setAvailabilityHandler({});
+}
