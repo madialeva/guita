@@ -94,12 +94,12 @@
 
 ## 9. Integración
 
-- [ ] 9.1 Ejecutar `ctest --preset native -j8` completo y `scripts/check-contract.sh`; verificar que todo pasa
-- [ ] 9.2 Verificar en Xvfb, con `scripts/run-server.sh` y `API_TOKEN`:
+- [x] 9.1 Ejecutar `ctest --preset native -j8` completo y `scripts/check-contract.sh`; verificar que todo pasa
+- [x] 9.2 Verificar en Xvfb, con `scripts/run-server.sh` y `API_TOKEN`:
   - dos clientes conectados: la factura creada en uno aparece en el otro sin tocarlo;
   - el cliente web (WASM) en Chrome igual, junto a uno de escritorio, con tildes escritas con teclas muertas;
   - al reiniciar el servidor, los clientes muestran el aviso, reconectan solos y siguen recibiendo eventos;
   - en standalone la lista se actualiza con los eventos y `ss` no muestra ningún puerto en escucha.
 
   Dejar el build compilado para la verificación visual del usuario
-- [ ] 9.3 Tras subir el usuario la rama y abrir el PR, verificar que el CI reinstala la toolchain con Qt WebSockets una vez, guarda la caché y termina en verde, con `check-contract.sh` incluido
+- [x] 9.3 Tras subir el usuario la rama y abrir el PR, verificar que el CI reinstala la toolchain con Qt WebSockets una vez, guarda la caché y termina en verde, con `check-contract.sh` incluido
