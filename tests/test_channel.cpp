@@ -406,7 +406,12 @@ private slots:
         Client idle(server.port()), active(server.port());
         QVERIFY(idle.open());
         QVERIFY(active.open());
-        QVERIFY(idle.call(1, kWatch));      // and never reads again
+        // Subscribed once the greeting arrives (publishing before it would reach
+        // no one); then it never reads again
+        QVERIFY(idle.call(1, kWatch));
+        const auto started = idle.read();
+        QVERIFY(started);
+        QCOMPARE(started->frame_case(), channel::ServerFrame::kMessage);
 
         v1::WatchInvoicesResponse big;
         big.mutable_created()->set_customer(std::string(60 * 1024, 'x'));

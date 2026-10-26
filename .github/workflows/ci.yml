@@ -1,6 +1,7 @@
 # Builds the project and runs the whole test suite on every push to a
-# development or release branch and on every pull request toward one, with the
-# toolchain installed by the repository scripts and cached (docs/architecture.md §10.4)
+# development or release branch and on every pull request toward one, inside the
+# official image of the project's GCC, with the rest of the toolchain installed by
+# the repository scripts and cached (docs/architecture.md §10.4)
 name: CI
 
 on:
@@ -23,19 +24,21 @@ jobs:
     # Required by the branch rulesets: keep this name stable
     name: Build and test
     runs-on: ubuntu-24.04
+    # GCC built from the GNU sources with the options scripts/build-gcc.sh uses
+    # locally: the same compiler on both sides
+    container: gcc:16.2.0-trixie
     # A cold run builds protobuf with abseil
     timeout-minutes: 90
 
     # The database suites use this server through GUITA_TEST_DB, so the CTest
-    # fixture starts no container. The password only protects a server that
-    # lives as long as the job, on the runner
+    # fixture starts no container. The job runs in a container, which reaches
+    # the service by its name. The password only protects a server that lives
+    # as long as the job
     services:
       postgres:
         image: postgres:18.6
         env:
           POSTGRES_PASSWORD: guita-ci
-        ports:
-          - 5432:5432
         options: >-
           --health-cmd "pg_isready --username postgres"
           --health-interval 5s
@@ -43,9 +46,11 @@ jobs:
           --health-retries 20
 
     env:
-      CC: gcc-14
-      CXX: g++-14
-      GUITA_TEST_DB: host=127.0.0.1 port=5432 user=postgres password=guita-ci dbname=postgres
+      GUITA_TEST_DB: host=postgres port=5432 user=postgres password=guita-ci dbname=postgres
+
+    defaults:
+      run:
+        shell: bash
 
     steps:
       # The whole history, so that check-contract.sh has origin/develop/vX.Y.Z
@@ -61,14 +66,34 @@ jobs:
           BRANCH: ${{ github.base_ref || github.ref_name }}
         run: scripts/check-version.sh "$BRANCH"
 
+      # The version of scripts/build-gcc.sh, so that the local compiler and this
+      # image cannot drift apart
+      - name: Check the compiler against scripts/build-gcc.sh
+        run: |
+          expected="$(sed -n 's/^GCC_VERSION=.*:-\([0-9.]*\)}.*/\1/p' scripts/build-gcc.sh)"
+          actual="$(g++ -dumpfullversion)"
+          if [[ "$actual" != "$expected" ]]; then
+              echo "::error::The image has GCC $actual, but scripts/build-gcc.sh installs GCC $expected:" \
+                   "change the image tag and the script together"
+              exit 1
+          fi
+          echo "GCC $actual, as scripts/build-gcc.sh"
+
       # Build tools and the libraries the project and Qt take from the system
       - name: Install the system packages
         run: |
-          sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends \
-            ninja-build libpq-dev zlib1g-dev \
+          apt-get update
+          apt-get install --yes --no-install-recommends \
+            cmake ninja-build python3-venv libpq-dev zlib1g-dev \
             libgl-dev libegl-dev libxkbcommon-dev libfontconfig1 libfreetype6 \
             libglib2.0-0t64 libdbus-1-3
+
+      # The presets and scripts look for GCC where scripts/build-gcc.sh installs
+      # it; the image has it in /usr/local. The link stays out of the cache
+      - name: Link the image's GCC where the presets look for it
+        run: |
+          mkdir -p ~/software
+          ln -sfn /usr/local ~/software/gcc-16.2.0
 
       # Qt and the libraries in ~/software, where the presets look for them.
       # Saved right after installing, so that a run with failing tests keeps it
@@ -76,8 +101,10 @@ jobs:
         id: toolchain
         uses: actions/cache/restore@v6
         with:
-          path: ~/software
-          key: toolchain-ubuntu-24.04-gcc14-${{ hashFiles('scripts/setup-qt.sh', 'scripts/build-deps.sh') }}
+          path: |
+            ~/software
+            !~/software/gcc-16.2.0
+          key: toolchain-gcc-16.2.0-trixie-${{ hashFiles('scripts/setup-qt.sh', 'scripts/build-deps.sh') }}
 
       - name: Install the toolchain
         if: steps.toolchain.outputs.cache-hit != 'true'
@@ -90,7 +117,9 @@ jobs:
         if: steps.toolchain.outputs.cache-hit != 'true'
         uses: actions/cache/save@v6
         with:
-          path: ~/software
+          path: |
+            ~/software
+            !~/software/gcc-16.2.0
           key: ${{ steps.toolchain.outputs.cache-primary-key }}
 
       - name: Configure

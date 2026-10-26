@@ -213,12 +213,16 @@ context properties, `qmlRegister*` calls or objects injected from `main.cpp`:
 - API responses are checked by parsing them with Qt (`QJsonDocument`), not with
   the library the code under test uses.
 - Keep the suite table in `docs/architecture.md` (§10.3) up to date.
-- The CI (`.github/workflows/ci.yml`, GitHub Actions, `ubuntu-24.04` with
-  GCC 14) runs the same `ctest --preset native` against a `postgres:18.6`
-  service container in `GUITA_TEST_DB`, with the toolchain of
-  `scripts/setup-qt.sh --desktop-only` and `scripts/build-deps.sh`, cached on
-  the hash of both scripts. A new system dependency also goes to the
-  workflow's `apt` list; it is described in `docs/architecture.md` §10.4.
+- The CI (`.github/workflows/ci.yml`, GitHub Actions) runs inside the
+  official `gcc:16.2.0-trixie` image, the same GCC as `scripts/build-gcc.sh`
+  installs locally (a step fails the job when they differ), and runs the same
+  `ctest --preset native` against a `postgres:18.6` service container reached
+  by name in `GUITA_TEST_DB`, with the toolchain of `scripts/setup-qt.sh
+  --desktop-only` and `scripts/build-deps.sh`, cached on the hash of both
+  scripts. A new system dependency also goes to the workflow's `apt` list (of
+  Debian trixie); it is described in `docs/architecture.md` §10.4. A new GCC
+  version changes at once in `scripts/build-gcc.sh`, `scripts/build-deps.sh`,
+  the `native` preset and the image of the CI.
 - `tests/web/dead-keys.mjs` checks by hand, outside `ctest`, that the web
   client composes accents typed with dead keys (`docs/architecture.md` §5.3);
   repeat it when Qt is upgraded.

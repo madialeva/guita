@@ -57,7 +57,7 @@
 
 ## 2. CI en el contenedor `gcc:16.2.0-trixie`
 
-- [ ] 2.1 Cambiar `.github/workflows/ci.yml` según la decisión 7:
+- [x] 2.1 Cambiar `.github/workflows/ci.yml` según la decisión 7:
   - `container: gcc:16.2.0-trixie` en el mismo job `Build and test`;
   - `GUITA_TEST_DB` con `host=postgres` y sin publicar el puerto;
   - `apt-get` sin `sudo`, sin `CC`/`CXX`;
@@ -66,11 +66,12 @@
   - la clave de caché `toolchain-gcc-16.2.0-trixie-...`.
 
   Verificar que `actionlint` (imagen Docker `rhysd/actionlint`) no da avisos.
-- [ ] 2.2 Reproducir en local los pasos del job dentro de `gcc:16.2.0-trixie`, con un `HOME` vacío y un `postgres:18.6` alcanzable como `postgres` en una red de Docker, para fijar la lista de paquetes de `apt`. Verificar:
+- [x] 2.2 Reproducir en local los pasos del job dentro de `gcc:16.2.0-trixie`, con un `HOME` vacío y un `postgres:18.6` alcanzable como `postgres` en una red de Docker, para fijar la lista de paquetes de `apt`. Verificar:
   - que dentro del contenedor `ctest --preset native` pasa completo y `scripts/check-contract.sh` termina bien;
   - que el paso de la versión falla si `GCC_VERSION` no coincide con el GCC de la imagen.
 
-- [ ] 2.3 Documentar el CI:
+  Encontrado al verificar: en el contenedor, `channel` fallaba siempre en `closesAClientThatDoesNotRead` después de `limitsTheChannels`. La prueba publicaba sin esperar a que la suscripción del cliente que no lee estuviera registrada, y si el servidor tardaba un poco más, los eventos no llegaban a nadie y el canal no se cerraba. Corregido en `tests/test_channel.cpp`: la prueba lee antes el saludo `started` de la suscripción, como las demás. La pareja de pruebas pasa 12 de 12 veces en el contenedor.
+- [x] 2.3 Documentar el CI:
   - `docs/architecture.md` §10.4: el contenedor, el enlace del compilador, la comprobación de versión, PostgreSQL por nombre y la clave de la caché;
   - AGENTS.md: el párrafo del CI, y que la versión de GCC se sube a la vez en `scripts/build-gcc.sh`, `scripts/build-deps.sh`, el preset y la imagen del CI.
 
