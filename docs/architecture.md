@@ -136,7 +136,8 @@ tools and to any later JSON mapping. The stricter `FILE` rules are not used:
 they protect the generated source code and forbid even reserved removals.
 Project headers are included with angle brackets from `src/`
 (`<backend/core/InvoiceService.h>`, `<client/ApiConnection.h>`). The whole
-project is C++23. Executables are written to `build/<preset>/bin`.
+project is C++26, built by GCC 16 natively and by Emscripten's Clang for the
+web client (§8). Executables are written to `build/<preset>/bin`.
 
 ## 4. Backend
 
@@ -645,21 +646,59 @@ mode self-contained, without external services.
 
 | Component | Version | Source |
 |---|---|---|
-| GCC | C++23 (13 or later) | system |
-| CMake | 3.21+ | system |
+| GCC, the native compiler (C++26 with reflection) | 16.2.0 | `scripts/build-gcc.sh` (GNU sources, configured as the CI's `gcc:16.2.0-trixie` image) |
+| CMake | 3.25+ | system |
 | Qt (desktop + `wasm_singlethread`), with `qttasktree` and `qtwebsockets` | 6.12.0 LTS | `scripts/setup-qt.sh` (aqtinstall) |
 | Emscripten | 5.0.5 | `scripts/setup-qt.sh` (emsdk) |
-| libpqxx | 8.0.2 (requires C++20) | `scripts/build-deps.sh` (static, PIC) |
+| libpqxx | 8.0.2 (requires C++20) | `scripts/build-deps.sh` (static, PIC, C++26) |
 | cpp-httplib | 0.61.0 | `scripts/build-deps.sh` (header-only, with zlib) |
-| protobuf (with abseil) | 36.2 | `scripts/build-deps.sh` (static, PIC, C++23; also the host `protoc`) |
-| protobuf (with abseil) for WebAssembly | 36.2 | `scripts/build-deps.sh` with emsdk (static, C++23, no `protoc`) |
+| protobuf (with abseil) | 36.2 | `scripts/build-deps.sh` (static, PIC, C++26; also the host `protoc`) |
+| protobuf (with abseil) for WebAssembly | 36.2 | `scripts/build-deps.sh` with emsdk (static, C++26, no `protoc`) |
 | buf | 1.74.0 | `scripts/build-deps.sh` (binary, checked against its release checksums) |
 | libpq, zlib | system | system development packages |
 | PostgreSQL | 17 tested | system |
 
 - Node.js 22 or later is needed only for the manual check of the web
   client's dead keys, `tests/web/dead-keys.mjs` (§5.3).
-- The scripts install the non-system dependencies (Qt, emsdk, libpqxx,
+- **The native compiler** (server, desktop client, tests and measurements) is
+  GCC 16.2.0 built from the GNU sources by `scripts/build-gcc.sh`, configured
+  as the official `gcc:16.2.0-trixie` image the CI runs in (§10.4):
+  `--disable-multilib`, full bootstrap, C and C++ only. The local compiler and
+  the CI's are therefore the same release with the same defaults (upstream
+  GCC enables neither PIE nor the stack protector by default, unlike
+  distribution packages). The script also fixes the `as` and `ld` found in the
+  PATH (`--with-as`, `--with-ld`), so that a later change of PATH does not give
+  that GCC other binutils than the ones it was configured with. The `native`
+  preset sets it as `CMAKE_CXX_COMPILER`, and configuring fails early, before
+  looking for Qt, with any compiler that is not GCC 16 or later accepting
+  `-std=c++26 -freflection`. Reflection is not enabled on any target yet.
+  `scripts/build-deps.sh` builds the native libraries with that GCC, so
+  `scripts/build-gcc.sh` runs first.
+- **The run path to GCC 16's `libstdc++`.** It is newer than the system's
+  (`GLIBCXX_3.4.29` on EL9), so the native executables carry a run path to its
+  directory: the project's through `CMAKE_BUILD_RPATH`, and `protoc` through
+  `-Wl,-rpath` in `scripts/build-deps.sh`. They start without
+  `LD_LIBRARY_PATH`, and the Qt libraries they load share that `libstdc++`,
+  which is backward compatible with the one Qt was built against. Linking it
+  statically would leave two standard libraries in one process, the static one
+  and the shared one Qt loads. The run path is absolute: development builds
+  are not relocatable, which desktop packaging will have to address (§9.2).
+- **What the client may use.** The web client is built by the Clang of emsdk
+  5.0.5 (Clang 23, a development snapshot), also in C++26 (`-std=gnu++26`).
+  The client code goes through both compilers, so it uses only what that Clang
+  and its libc++ support; the backend, native only, may use all of GCC 16.
+  Measured with one small program per feature:
+
+  | C++26 | Clang of emsdk 5.0.5 (client) | GCC 16.2 (backend) |
+  |---|---|---|
+  | Pack indexing (`T...[0]`), `= delete("reason")`, the `_` placeholder, structured bindings as a condition and as a pack, `#embed`, variadic friends, placement new in `constexpr`, user `static_assert` messages | yes | yes |
+  | Reflection (`^^`, annotations, function parameters), expansion statements (`template for`), contracts, exceptions in `constexpr` | no | yes (reflection with `-freflection`, contracts with `-fcontracts`) |
+  | Library: `inplace_vector`, `views::concat`, `function_ref`, `copyable_function`, `optional` as a range, `text_encoding`, `std::simd`, `<debugging>` | no | yes |
+
+  The emsdk version follows Qt (next point), so this changes only when Qt is
+  upgraded. The CI does not build the web client yet, so a change to
+  `src/client` builds the `wasm` preset locally as well.
+- The scripts install the non-system dependencies (GCC, Qt, emsdk, libpqxx,
   cpp-httplib, protobuf, buf) without root privileges under `$SOFTWARE_DIR` (default
   `~/software`), which is where the CMake presets look for them; with other
   locations, pass `CMAKE_PREFIX_PATH` or use a `CMakeUserPresets.json`.

@@ -51,6 +51,9 @@ First version: a proof of concept of the architecture, to be released as 0.1.0.
 - English and Spanish user interface, following the system or browser language.
 - Scripts to install the toolchain and libraries without root privileges, build
   the web client, run the server and create the database.
+- C++26 code base: the server, the desktop client and the tests are built with
+  GCC 16, which `scripts/build-gcc.sh` builds from the GNU sources without root
+  privileges, and the web client with Emscripten's Clang.
 - README and architecture documentation.
 - Automated test suite run with `ctest --preset native`: backend, RPC API,
   client and QML amount logic, with an ephemeral PostgreSQL container started

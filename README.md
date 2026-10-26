@@ -3,11 +3,11 @@
 <p align="center">
   <a href="https://github.com/madialeva/guita/actions/workflows/ci.yml"><img src="https://github.com/madialeva/guita/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="LICENSE.md"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License" /></a>
-  <a href="#"><img src="https://img.shields.io/badge/c%2B%2B-23-00599C?logo=cplusplus&logoColor=white" alt="C++23" /></a>
+  <a href="#"><img src="https://img.shields.io/badge/c%2B%2B-26-00599C?logo=cplusplus&logoColor=white" alt="C++26" /></a>
   <a href="#"><img src="https://img.shields.io/badge/Qt-6.12_LTS-41CD52?logo=qt&logoColor=white" alt="Qt 6.12 LTS" /></a>
   <a href="#"><img src="https://img.shields.io/badge/WebAssembly-654FF0?logo=webassembly&logoColor=white" alt="WebAssembly" /></a>
   <a href="#"><img src="https://img.shields.io/badge/PostgreSQL-4169E1?logo=postgresql&logoColor=white" alt="PostgreSQL" /></a>
-  <a href="#"><img src="https://img.shields.io/badge/CMake-3.21-064F8C?logo=cmake&logoColor=white" alt="CMake 3.21" /></a>
+  <a href="#"><img src="https://img.shields.io/badge/CMake-3.25-064F8C?logo=cmake&logoColor=white" alt="CMake 3.25" /></a>
   <a href="#"><img src="https://img.shields.io/badge/backend-cpp--httplib_%7C_libpqxx_%7C_Protobuf-555555" alt="cpp-httplib, libpqxx, Protobuf" /></a>
 </p>
 
@@ -20,6 +20,18 @@
   <strong>libpqxx</strong>, <strong>Protobuf</strong>). On the desktop the backend can also be embedded in
   the client process, so the same program runs fully standalone — the kind of
   experience Electron gives JavaScript applications, without shipping a browser.
+</p>
+
+<p align="left">
+  The code base has moved to <strong>C++26</strong>, whose reflection makes it
+  possible to apply inversion of control through <strong>dependency
+  injection</strong>: a container that builds the services, wires them
+  together and manages their lifetime, either a single instance for the whole
+  application or one per request. It is the way of programming Java and C#
+  developers are used to, where the container rather than hand-written
+  singletons owns the objects. That container is the next step; for now the
+  project builds as C++26, with GCC 16 for the native side and Emscripten's
+  Clang for the web client.
 </p>
 
 ---
@@ -42,6 +54,7 @@ Proof of concept (v0.1.0). See [CHANGELOG.md](CHANGELOG.md) for what each versio
 | ⬜ | Embedded PostgreSQL for standalone mode |
 | ⬜ | User authentication |
 | ⬜ | Desktop packages |
+| ⬜ | Dependency injection container (C++26 reflection), with application and per-request lifetimes |
 | ✅ | Automated tests with an ephemeral PostgreSQL |
 | ✅ | Continuous integration (GitHub Actions) |
 
@@ -78,8 +91,8 @@ backend. See
 
 | Software | Version | Needed for |
 |---|---|---|
-| GCC | C++23 (13 or later) | everything |
-| CMake and Ninja | CMake 3.21+ | everything |
+| GCC, built from the GNU sources (C++26 with reflection) | 16.2 | server, desktop client, tests |
+| CMake and Ninja | CMake 3.25+ | everything |
 | Qt, desktop kit (`gcc_64`) | 6.12 | native client; host tools of the WASM build |
 | Qt, WebAssembly kit (`wasm_singlethread`) | 6.12 | web client |
 | Emscripten (emsdk) | 5.0.5, the release Qt 6.12 requires | web client |
@@ -111,37 +124,41 @@ tools and the `qttasktree` module.
 
 If something above is missing, install it before building.
 
-**System packages** — compiler, build tools and the libraries the backend depends on:
+**System packages** — a C++ compiler and the tools to build GCC 16, the build
+tools and the libraries the backend depends on:
 
 ```sh
 # Fedora, RHEL and derivatives
-sudo dnf install gcc-c++ cmake ninja-build git zlib-devel libpq-devel postgresql-server
+sudo dnf install gcc-c++ make m4 bzip2 xz wget gnupg2 cmake ninja-build git zlib-devel libpq-devel postgresql-server
 
 # Debian and Ubuntu
-sudo apt install build-essential cmake ninja-build git zlib1g-dev libpq-dev postgresql
+sudo apt install build-essential m4 bzip2 xz-utils wget gpgv cmake ninja-build git zlib1g-dev libpq-dev postgresql
 ```
 
-**Qt, Emscripten and the backend libraries** — install them with your usual
-tools (Qt online installer, emsdk, the libraries from source), or let the
-repository scripts do it without root privileges under `$SOFTWARE_DIR`
+**GCC 16, Qt, Emscripten and the backend libraries** — install them with your
+usual tools (Qt online installer, emsdk, GCC and the libraries from source), or
+let the repository scripts do it without root privileges under `$SOFTWARE_DIR`
 (default `~/software`):
 
 ```sh
+scripts/build-gcc.sh  # GCC 16.2 from the GNU sources (half an hour to an hour), the native compiler
 scripts/setup-qt.sh   # Qt 6.12 desktop + WASM kits (aqtinstall), emsdk 5.0.5, Python 3.12 via uv
 scripts/build-deps.sh # libpqxx, cpp-httplib and protobuf (native and WASM) from source, and buf
 ```
 
-Run them in this order: `build-deps.sh` builds protobuf for the web client with
-the emsdk that `setup-qt.sh` installs (without it, that part is skipped with a
-warning).
+Run them in this order: `build-deps.sh` builds the native libraries with the
+GCC of `build-gcc.sh`, and protobuf for the web client with the emsdk that
+`setup-qt.sh` installs (without it, that part is skipped with a warning). The
+web client is built by Emscripten's Clang, also in C++26.
 
 `setup-qt.sh` needs [uv](https://docs.astral.sh/uv/) to provide the Python
 that Emscripten requires when the system one is older than 3.10. To build only
 the server, the desktop client and the tests, `scripts/setup-qt.sh
 --desktop-only` installs just the desktop kit, without the WebAssembly kit,
 emsdk or Python. The CMake
-presets look for Qt and the libraries where these scripts install them; when
-they live elsewhere, pass `-DCMAKE_PREFIX_PATH="<qt-prefix>;<libpqxx-prefix>;..."` to the native
+presets look for GCC, Qt and the libraries where these scripts install them;
+when they live elsewhere, pass `-DCMAKE_CXX_COMPILER=<g++ 16>` and
+`-DCMAKE_PREFIX_PATH="<qt-prefix>;<libpqxx-prefix>;..."` to the native
 build, or add a `CMakeUserPresets.json` (for the web build it also sets the Qt
 WASM toolchain file, `QT_HOST_PATH` and `EMSDK`).
 
