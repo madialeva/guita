@@ -79,11 +79,11 @@
 
 ## 3. Verificación en GitHub
 
-- [ ] 3.1 El usuario sube la rama y abre el PR hacia `develop/v0.1.0` (puede ser en borrador). Verificar:
+- [x] 3.1 El usuario sube la rama y abre el PR hacia `develop/v0.1.0` (puede ser en borrador). Verificar:
   - que el check `Build and test` sigue apareciendo como obligatorio;
   - que el job se ejecuta dentro de `gcc:16.2.0-trixie`;
   - que la ejecución en frío instala la toolchain, guarda la caché con la clave nueva y termina en verde.
 
   Encontrado en la primera ejecución: la instalación (11 minutos), la caché, la compilación y la batería pasaron, pero `scripts/check-contract.sh` falló por "dubious ownership". El checkout pertenece al usuario del runner y los pasos se ejecutan como root dentro del contenedor, y `actions/checkout` solo lo marca como seguro durante su propio paso. Un paso nuevo, "Trust the checkout", añade el directorio y su `.git` (que clona buf) a `safe.directory`. La reproducción local de la tarea 2.2 no lo detectó porque los ficheros se pusieron a nombre de root.
-- [ ] 3.2 Relanzar el job desde el PR. Verificar que restaura la caché, no ejecuta los scripts de instalación y termina en verde.
-- [ ] 3.3 Con el visto bueno del usuario, comentar en #12 que su job WebAssembly tendrá que ejecutarse también en `gcc:16.2.0-trixie`, porque `scripts/build-deps.sh` compila con GCC 16 el `protoc` nativo. Verificar que el comentario enlaza este cambio.
+- [x] 3.2 Relanzar el job desde el PR. Verificar que restaura la caché, no ejecuta los scripts de instalación y termina en verde.
+- [x] 3.3 Con el visto bueno del usuario, comentar en #12 que su job WebAssembly tendrá que ejecutarse también en `gcc:16.2.0-trixie`, porque `scripts/build-deps.sh` compila con GCC 16 el `protoc` nativo. Verificar que el comentario enlaza este cambio.
