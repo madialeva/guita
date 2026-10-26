@@ -32,13 +32,25 @@ Principles that every change must keep:
 - The backend never depends on Qt and the client never accesses the database.
 - Same engine (PostgreSQL), same SQL and same migrations in every mode.
 
-Use C++23, Qt Quick (QML), cpp-httplib, libpqxx 8, Protobuf, PostgreSQL, CMake,
-Ninja and GCC. The backend uses no framework and no ORM. Qt is
+Use C++26, Qt Quick (QML), cpp-httplib, libpqxx 8, Protobuf, PostgreSQL, CMake,
+Ninja and GCC 16. The backend uses no framework and no ORM. Qt is
 6.12 LTS everywhere (desktop kit for the native client, `wasm_singlethread` kit
 for the web client, both from `~/software/Qt`; CMake requires 6.12): never add
 code paths or workarounds for other Qt versions, and never build against the
 system Qt. Do not introduce Qt Widgets or new production dependencies without
 an approved OpenSpec change.
+
+Every build is C++26 with two compilers: the native side (backend, desktop
+client, tests and measurements) with GCC 16.2.0 built from the GNU sources
+(`scripts/build-gcc.sh`, the same release and options as the CI's
+`gcc:16.2.0-trixie` image), and the web client with the Clang of the emsdk that
+Qt requires. The same client code goes through both, so `src/client` (and the
+contract it shares) uses only what that Clang and its libc++ support
+(`docs/architecture.md` §8): reflection, contracts, expansion statements
+(`template for`) and most of the new C++26 library stay in the backend.
+Reflection (`-freflection`) is not enabled on any target yet. Until the CI
+builds WebAssembly (#12), a change that touches `src/client` also builds the
+`wasm` preset (`scripts/build-wasm.sh`) before it is done.
 
 ## Source layout
 
@@ -201,12 +213,16 @@ context properties, `qmlRegister*` calls or objects injected from `main.cpp`:
 - API responses are checked by parsing them with Qt (`QJsonDocument`), not with
   the library the code under test uses.
 - Keep the suite table in `docs/architecture.md` (§10.3) up to date.
-- The CI (`.github/workflows/ci.yml`, GitHub Actions, `ubuntu-24.04` with
-  GCC 14) runs the same `ctest --preset native` against a `postgres:18.6`
-  service container in `GUITA_TEST_DB`, with the toolchain of
-  `scripts/setup-qt.sh --desktop-only` and `scripts/build-deps.sh`, cached on
-  the hash of both scripts. A new system dependency also goes to the
-  workflow's `apt` list; it is described in `docs/architecture.md` §10.4.
+- The CI (`.github/workflows/ci.yml`, GitHub Actions) runs inside the
+  official `gcc:16.2.0-trixie` image, the same GCC as `scripts/build-gcc.sh`
+  installs locally (a step fails the job when they differ), and runs the same
+  `ctest --preset native` against a `postgres:18.6` service container reached
+  by name in `GUITA_TEST_DB`, with the toolchain of `scripts/setup-qt.sh
+  --desktop-only` and `scripts/build-deps.sh`, cached on the hash of both
+  scripts. A new system dependency also goes to the workflow's `apt` list (of
+  Debian trixie); it is described in `docs/architecture.md` §10.4. A new GCC
+  version changes at once in `scripts/build-gcc.sh`, `scripts/build-deps.sh`,
+  the `native` preset and the image of the CI.
 - `tests/web/dead-keys.mjs` checks by hand, outside `ctest`, that the web
   client composes accents typed with dead keys (`docs/architecture.md` §5.3);
   repeat it when Qt is upgraded.
@@ -282,8 +298,11 @@ include directory; project code never relies on it.
 
 - Dependencies that do not come from the system are installed without sudo in
   `~/software` (`SOFTWARE_DIR` in the scripts; the CMake presets assume
-  `~/software`): libpqxx 8.0.2, cpp-httplib 0.61.0, protobuf
-  36.2 (with abseil, built with C++23; also for WebAssembly in
+  `~/software`): GCC 16.2.0 (`scripts/build-gcc.sh`, which runs first; its
+  `libstdc++` is newer than the system's, so the native executables carry a run
+  path to it), libpqxx 8.0.2, cpp-httplib 0.61.0, protobuf
+  36.2 (with abseil; the native libraries are built with that GCC, all in C++26;
+  protobuf also for WebAssembly in
   `~/software/protobuf-36.2-wasm`, with the emsdk of `setup-qt.sh`, which runs
   first) and buf 1.74.0 (`scripts/build-deps.sh`),
   Qt 6.12.0 desktop + WASM and
@@ -292,8 +311,9 @@ include directory; project code never relies on it.
   Anything managed by `uv` (the Python ≥ 3.10 that Emscripten needs,
   `~/.local/bin/python3.12`) stays in uv's standard location; `EMSDK_PYTHON`
   must point to it, also after sourcing `emsdk_env.sh`, which clears it.
-- System packages: GCC ≥ 13 (C++23), CMake ≥ 3.21, zlib,
-  `libpq5-devel`, PostgreSQL.
+- System packages: a C++ compiler to build GCC (gcc-toolset-14 on EL9, whose
+  binutils that GCC keeps using), CMake ≥ 3.25, zlib, `libpq5-devel`,
+  PostgreSQL.
 - Docker (the user may run it without sudo) for the ephemeral test PostgreSQL;
   the local image is `postgres:18.6`.
 - Build with the `native` and `wasm` CMake presets (`scripts/build-wasm.sh`

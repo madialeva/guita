@@ -7,11 +7,18 @@
 #                   emsdk that scripts/setup-qt.sh installs: run that script first
 #   - buf           lint and breaking-change checks of the contract (binary)
 #
-# System requirements: g++ with C++23 (GCC 13+), cmake 3.21+, ninja, git, libpq (libpq5-devel /
-# libpq-devel) and zlib (devel).
+# The native libraries are built with the project's compiler, the GCC that
+# scripts/build-gcc.sh installs in $SOFTWARE_DIR/gcc-$GCC_VERSION (run it first), and
+# all of them in C++26, the project's standard. Their executables (protoc) get a run
+# path to that GCC's libstdc++, newer than the system's. Each build starts from an
+# empty build directory, so that a build configured with another compiler is not reused.
+#
+# System requirements: cmake 3.25+, ninja, git, libpq (libpq5-devel / libpq-devel) and
+# zlib (devel).
 #
 # Variables:
 #   SOFTWARE_DIR         root of the local dependencies  [~/software]
+#   GCC_VERSION          GCC of scripts/build-gcc.sh     [16.2.0]
 #   EMSDK_DIR            emsdk for the WebAssembly build [$SOFTWARE_DIR/emsdk]
 #   LIBPQXX_VERSION      libpqxx tag                     [8.0.2]
 #   HTTPLIB_VERSION      cpp-httplib tag (without "v")   [0.61.0]
@@ -20,12 +27,21 @@
 set -euo pipefail
 
 SOFTWARE_DIR="${SOFTWARE_DIR:-$HOME/software}"
+GCC_VERSION="${GCC_VERSION:-16.2.0}"
 LIBPQXX_VERSION="${LIBPQXX_VERSION:-8.0.2}"
 HTTPLIB_VERSION="${HTTPLIB_VERSION:-0.61.0}"
 PROTOBUF_VERSION="${PROTOBUF_VERSION:-36.2}"
 BUF_VERSION="${BUF_VERSION:-1.74.0}"
 SRC="$SOFTWARE_DIR/src"
 mkdir -p "$SRC"
+
+GCC_DIR="$SOFTWARE_DIR/gcc-$GCC_VERSION"
+if [[ ! -x "$GCC_DIR/bin/g++" ]]; then
+    echo "error: no GCC $GCC_VERSION in $GCC_DIR: run scripts/build-gcc.sh first" >&2
+    exit 1
+fi
+# The directory of that GCC's libstdc++, for the run path of the executables
+LIBSTDCXX_DIR="$(dirname "$(readlink -f "$("$GCC_DIR/bin/g++" -print-file-name=libstdc++.so)")")"
 
 # fetch <git url> <tag> <directory name> [git clone options...]
 fetch() {
@@ -34,12 +50,15 @@ fetch() {
     [[ -d "$SRC/$name" ]] || git clone -q --depth 1 --branch "$tag" "$@" "$url" "$SRC/$name"
 }
 
-# build <directory name> <install prefix> [cmake options...]
+# build <directory name> <install prefix> [cmake options...]: a native build
 build() {
     local name="$1" prefix="$2"
     shift 2
+    rm -rf "$SRC/$name/build"
     cmake -S "$SRC/$name" -B "$SRC/$name/build" -G Ninja \
-        -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$prefix" "$@"
+        -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$prefix" \
+        -DCMAKE_C_COMPILER="$GCC_DIR/bin/gcc" -DCMAKE_CXX_COMPILER="$GCC_DIR/bin/g++" \
+        -DCMAKE_CXX_STANDARD=26 -DCMAKE_EXE_LINKER_FLAGS="-Wl,-rpath,$LIBSTDCXX_DIR" "$@"
     cmake --build "$SRC/$name/build" -j"$(nproc)"
     cmake --install "$SRC/$name/build"
     echo ">> $name installed in $prefix"
@@ -59,12 +78,12 @@ build "cpp-httplib-$HTTPLIB_VERSION" "$SOFTWARE_DIR/cpp-httplib-$HTTPLIB_VERSION
     -DHTTPLIB_USE_BROTLI_IF_AVAILABLE=OFF -DHTTPLIB_USE_ZSTD_IF_AVAILABLE=OFF
 
 # abseil comes as a submodule and is installed next to protobuf. Both are built
-# with the project's C++ standard, so that abseil and the project agree on the
-# std types abseil aliases (string_view, optional, ...)
+# with the project's C++ standard (by build()), so that abseil and the project
+# agree on the std types abseil aliases (string_view, optional, ...)
 fetch https://github.com/protocolbuffers/protobuf.git "v$PROTOBUF_VERSION" "protobuf-$PROTOBUF_VERSION" \
     --recurse-submodules --shallow-submodules
 build "protobuf-$PROTOBUF_VERSION" "$SOFTWARE_DIR/protobuf-$PROTOBUF_VERSION" \
-    -DCMAKE_CXX_STANDARD=23 -DBUILD_SHARED_LIBS=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+    -DBUILD_SHARED_LIBS=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
     -Dprotobuf_BUILD_TESTS=OFF -Dprotobuf_BUILD_LIBUPB=OFF -Dprotobuf_INSTALL=ON \
     -Dprotobuf_ABSL_PROVIDER=module -DABSL_ENABLE_INSTALL=ON -DABSL_PROPAGATE_CXX_STD=ON
 
@@ -82,9 +101,10 @@ if [[ -f "$EMSDK_DIR/emsdk_env.sh" ]]; then
         source "$EMSDK_DIR/emsdk_env.sh" >/dev/null 2>&1
         export EMSDK_PYTHON="$HOME/.local/bin/python3.12"
         src="$SRC/protobuf-$PROTOBUF_VERSION"
+        rm -rf "$src/build-wasm"
         emcmake cmake -S "$src" -B "$src/build-wasm" -G Ninja \
             -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$protobuf_wasm" \
-            -DCMAKE_CXX_STANDARD=23 -DBUILD_SHARED_LIBS=OFF \
+            -DCMAKE_CXX_STANDARD=26 -DBUILD_SHARED_LIBS=OFF \
             -Dprotobuf_BUILD_TESTS=OFF -Dprotobuf_BUILD_PROTOC_BINARIES=OFF -Dprotobuf_BUILD_LIBUPB=OFF \
             -Dprotobuf_INSTALL=ON -Dprotobuf_ABSL_PROVIDER=module -DABSL_ENABLE_INSTALL=ON \
             -DABSL_PROPAGATE_CXX_STD=ON

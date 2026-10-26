@@ -136,7 +136,8 @@ tools and to any later JSON mapping. The stricter `FILE` rules are not used:
 they protect the generated source code and forbid even reserved removals.
 Project headers are included with angle brackets from `src/`
 (`<backend/core/InvoiceService.h>`, `<client/ApiConnection.h>`). The whole
-project is C++23. Executables are written to `build/<preset>/bin`.
+project is C++26, built by GCC 16 natively and by Emscripten's Clang for the
+web client (§8). Executables are written to `build/<preset>/bin`.
 
 ## 4. Backend
 
@@ -645,21 +646,59 @@ mode self-contained, without external services.
 
 | Component | Version | Source |
 |---|---|---|
-| GCC | C++23 (13 or later) | system |
-| CMake | 3.21+ | system |
+| GCC, the native compiler (C++26 with reflection) | 16.2.0 | `scripts/build-gcc.sh` (GNU sources, configured as the CI's `gcc:16.2.0-trixie` image) |
+| CMake | 3.25+ | system |
 | Qt (desktop + `wasm_singlethread`), with `qttasktree` and `qtwebsockets` | 6.12.0 LTS | `scripts/setup-qt.sh` (aqtinstall) |
 | Emscripten | 5.0.5 | `scripts/setup-qt.sh` (emsdk) |
-| libpqxx | 8.0.2 (requires C++20) | `scripts/build-deps.sh` (static, PIC) |
+| libpqxx | 8.0.2 (requires C++20) | `scripts/build-deps.sh` (static, PIC, C++26) |
 | cpp-httplib | 0.61.0 | `scripts/build-deps.sh` (header-only, with zlib) |
-| protobuf (with abseil) | 36.2 | `scripts/build-deps.sh` (static, PIC, C++23; also the host `protoc`) |
-| protobuf (with abseil) for WebAssembly | 36.2 | `scripts/build-deps.sh` with emsdk (static, C++23, no `protoc`) |
+| protobuf (with abseil) | 36.2 | `scripts/build-deps.sh` (static, PIC, C++26; also the host `protoc`) |
+| protobuf (with abseil) for WebAssembly | 36.2 | `scripts/build-deps.sh` with emsdk (static, C++26, no `protoc`) |
 | buf | 1.74.0 | `scripts/build-deps.sh` (binary, checked against its release checksums) |
 | libpq, zlib | system | system development packages |
 | PostgreSQL | 17 tested | system |
 
 - Node.js 22 or later is needed only for the manual check of the web
   client's dead keys, `tests/web/dead-keys.mjs` (§5.3).
-- The scripts install the non-system dependencies (Qt, emsdk, libpqxx,
+- **The native compiler** (server, desktop client, tests and measurements) is
+  GCC 16.2.0 built from the GNU sources by `scripts/build-gcc.sh`, configured
+  as the official `gcc:16.2.0-trixie` image the CI runs in (§10.4):
+  `--disable-multilib`, full bootstrap, C and C++ only. The local compiler and
+  the CI's are therefore the same release with the same defaults (upstream
+  GCC enables neither PIE nor the stack protector by default, unlike
+  distribution packages). The script also fixes the `as` and `ld` found in the
+  PATH (`--with-as`, `--with-ld`), so that a later change of PATH does not give
+  that GCC other binutils than the ones it was configured with. The `native`
+  preset sets it as `CMAKE_CXX_COMPILER`, and configuring fails early, before
+  looking for Qt, with any compiler that is not GCC 16 or later accepting
+  `-std=c++26 -freflection`. Reflection is not enabled on any target yet.
+  `scripts/build-deps.sh` builds the native libraries with that GCC, so
+  `scripts/build-gcc.sh` runs first.
+- **The run path to GCC 16's `libstdc++`.** It is newer than the system's
+  (`GLIBCXX_3.4.29` on EL9), so the native executables carry a run path to its
+  directory: the project's through `CMAKE_BUILD_RPATH`, and `protoc` through
+  `-Wl,-rpath` in `scripts/build-deps.sh`. They start without
+  `LD_LIBRARY_PATH`, and the Qt libraries they load share that `libstdc++`,
+  which is backward compatible with the one Qt was built against. Linking it
+  statically would leave two standard libraries in one process, the static one
+  and the shared one Qt loads. The run path is absolute: development builds
+  are not relocatable, which desktop packaging will have to address (§9.2).
+- **What the client may use.** The web client is built by the Clang of emsdk
+  5.0.5 (Clang 23, a development snapshot), also in C++26 (`-std=gnu++26`).
+  The client code goes through both compilers, so it uses only what that Clang
+  and its libc++ support; the backend, native only, may use all of GCC 16.
+  Measured with one small program per feature:
+
+  | C++26 | Clang of emsdk 5.0.5 (client) | GCC 16.2 (backend) |
+  |---|---|---|
+  | Pack indexing (`T...[0]`), `= delete("reason")`, the `_` placeholder, structured bindings as a condition and as a pack, `#embed`, variadic friends, placement new in `constexpr`, user `static_assert` messages | yes | yes |
+  | Reflection (`^^`, annotations, function parameters), expansion statements (`template for`), contracts, exceptions in `constexpr` | no | yes (reflection with `-freflection`, contracts with `-fcontracts`) |
+  | Library: `inplace_vector`, `views::concat`, `function_ref`, `copyable_function`, `optional` as a range, `text_encoding`, `std::simd`, `<debugging>` | no | yes |
+
+  The emsdk version follows Qt (next point), so this changes only when Qt is
+  upgraded. The CI does not build the web client yet, so a change to
+  `src/client` builds the `wasm` preset locally as well.
+- The scripts install the non-system dependencies (GCC, Qt, emsdk, libpqxx,
   cpp-httplib, protobuf, buf) without root privileges under `$SOFTWARE_DIR` (default
   `~/software`), which is where the CMake presets look for them; with other
   locations, pass `CMAKE_PREFIX_PATH` or use a `CMakeUserPresets.json`.
@@ -811,32 +850,51 @@ application's default connection string.
 `.github/workflows/ci.yml` runs on GitHub Actions on every push to
 `develop/**` and `release/**`, on every pull request toward them, and by hand
 (`workflow_dispatch`, to try a change branch before its pull request). A
-single job, `Build and test`, on `ubuntu-24.04` with GCC 14:
+single job, `Build and test`, on `ubuntu-24.04` but inside the official
+`gcc:16.2.0-trixie` image (Debian trixie with GCC 16.2.0 built from the GNU
+sources, the same release and configure options as `scripts/build-gcc.sh`
+installs locally, §8):
 
-1. checks out the whole history, which `scripts/check-contract.sh` needs;
+1. checks out the whole history, which `scripts/check-contract.sh` needs, and
+   marks it as safe for git: it belongs to the runner's user, not to the
+   container's root, and `actions/checkout` only trusts it during its own step;
 2. runs `scripts/check-version.sh` against the branch pushed to or the base
    branch of the pull request (manual runs have no branch to compare with);
-3. installs with `apt` what the project takes from the system: Ninja, libpq,
-   zlib and the libraries Qt needs to build and run headless;
-4. restores `~/software` from the cache or, when the key changed, installs it
+3. checks that the image's GCC is the `GCC_VERSION` of `scripts/build-gcc.sh`,
+   and fails otherwise, so that the local compiler and the CI's cannot drift
+   apart;
+4. installs with `apt` (as root, without `sudo`) what the project takes from
+   the system and the image lacks: CMake, Ninja, the Python `venv` module for
+   aqtinstall, libpq, zlib and the libraries Qt needs to build and run
+   headless;
+5. links `~/software/gcc-16.2.0` to the image's `/usr/local`, where the
+   presets and `scripts/build-deps.sh` look for the compiler; the link stays
+   out of the cache;
+6. restores `~/software` from the cache or, when the key changed, installs it
    with `scripts/setup-qt.sh --desktop-only` and `scripts/build-deps.sh`,
    drops the sources, and saves it at once, so that a run whose tests fail
-   keeps it. The key is the hash of both scripts plus the system and the
-   compiler: changing a version in them reinstalls everything, and a cold run
-   (mostly protobuf with abseil) is covered by the job's timeout;
-5. runs `cmake --preset native`, `cmake --build --preset native` and
+   keeps it. The key is the hash of both scripts plus the image
+   (`toolchain-gcc-16.2.0-trixie-<hash>`), whose system and compiler the
+   libraries are built with: changing a version in them reinstalls
+   everything, and a cold run (mostly protobuf with abseil) is covered by the
+   job's timeout;
+7. runs `cmake --preset native`, `cmake --build --preset native` and
    `ctest --preset native --parallel`;
-6. runs `scripts/check-contract.sh` against `origin/develop/vX.Y.Z`, also
+8. runs `scripts/check-contract.sh` against `origin/develop/vX.Y.Z`, also
    when the build or the tests fail, so that a pull request shows both kinds
    of problem at once. It runs every time, since it takes a second; on a push
    to the development branch itself it compares the contract with itself.
 
 PostgreSQL is a `postgres:18.6` service container with a health check, given
-to the tests in `GUITA_TEST_DB`, so the fixture starts nothing: the suites are
-the same locally and in CI, and only the provider of the server changes. A new
-run of the same branch or pull request cancels the one in progress, and the
-workflow only reads the repository (`contents: read`). The WebAssembly build
-and the measurements of `tests/bench` are not part of the CI.
+to the tests in `GUITA_TEST_DB` and reached by its name (`host=postgres`),
+since the job runs in a container too, so the fixture starts nothing: the
+suites are the same locally and in CI, and only the provider of the server
+changes. Docker Hub does not rate-limit the pulls of public images from
+GitHub's runners. A new run of the same branch or pull request cancels the one
+in progress, and the workflow only reads the repository (`contents: read`).
+The WebAssembly build (#12; its job needs this image too, since
+`scripts/build-deps.sh` builds the host `protoc` with GCC 16) and the
+measurements of `tests/bench` are not part of the CI.
 
 **Requiring it.** A repository ruleset, `develop and release`, on
 `develop/**` and `release/**` (Settings → Rules → Rulesets) requires the `Build and test` status check, with
