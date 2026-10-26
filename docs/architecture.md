@@ -855,7 +855,9 @@ single job, `Build and test`, on `ubuntu-24.04` but inside the official
 sources, the same release and configure options as `scripts/build-gcc.sh`
 installs locally, §8):
 
-1. checks out the whole history, which `scripts/check-contract.sh` needs;
+1. checks out the whole history, which `scripts/check-contract.sh` needs, and
+   marks it as safe for git: it belongs to the runner's user, not to the
+   container's root, and `actions/checkout` only trusts it during its own step;
 2. runs `scripts/check-version.sh` against the branch pushed to or the base
    branch of the pull request (manual runs have no branch to compare with);
 3. checks that the image's GCC is the `GCC_VERSION` of `scripts/build-gcc.sh`,

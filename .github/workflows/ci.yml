@@ -58,6 +58,13 @@ jobs:
         with:
           fetch-depth: 0
 
+      # The checkout belongs to the runner's user, not to the container's root:
+      # git refuses it, and the clone of it buf makes, unless they are trusted
+      - name: Trust the checkout
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git config --global --add safe.directory "$GITHUB_WORKSPACE/.git"
+
       # The branch pushed to, or the base branch of the pull request; a manual
       # run has no branch to compare with
       - name: Check the version against the branch
