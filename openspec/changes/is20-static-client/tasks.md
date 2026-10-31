@@ -55,9 +55,15 @@
 
 ## 3. Verificación del ejecutable
 
-- [ ] 3.1 En esta máquina, sobre Xvfb, copiar `build/dist/client` a un directorio temporal y lanzarlo con `env -i` (solo `DISPLAY`, `HOME` y `LANG`) en modo conectado, contra `scripts/run-server.sh`. Verificar:
+- [x] 3.1 En esta máquina, sobre Xvfb, copiar `build/dist/client` a un directorio temporal y lanzarlo con `env -i` (solo `DISPLAY`, `HOME` y `LANG`) en modo conectado, contra `scripts/run-server.sh`. Verificar:
   - que lista las facturas y crea una nueva, que aparece en la lista;
   - que las capturas con `LANG=es_ES.UTF-8` y con `LANG=C` coinciden en estilo, vistas y textos con las del cliente nativo en el mismo idioma.
-- [ ] 3.2 Repetirlo en modo standalone, con `--standalone` y `--db` hacia la base de datos de desarrollo. Verificar que lista y crea facturas, y que `ss -ltnp` no muestra ningún puerto abierto por el proceso.
-- [ ] 3.3 Ejecutarlo en un contenedor `ubuntu:24.04` con Xvfb y solo los paquetes de ejecución de X11, OpenGL y fontconfig, con el ejecutable montado de solo lectura y la red del host, en modo conectado. Verificar que la captura muestra la ventana con las facturas del servidor. Anotar en `docs/architecture.md` §9.2 la lista mínima de paquetes y el tamaño del ejecutable.
-- [ ] 3.4 El usuario prueba `build/dist/client` en su escritorio, en los dos modos, y da el visto bueno.
+
+  Resultado: el ejecutable estático creó la factura 7 y la lista la mostró. Comparadas píxel a píxel, las capturas de los dos clientes solo difieren en 47 píxeles del suavizado de algunos glifos, en los dos idiomas: mismo estilo de Qt Quick Controls, mismas vistas y mismos textos. `pkill -f client` mató la propia shell de la prueba, cuya línea de órdenes contenía ese texto; `pkill -x client` compara solo el nombre del proceso.
+- [x] 3.2 Repetirlo en modo standalone, con `--standalone` y `--db` hacia la base de datos de desarrollo. Verificar que lista y crea facturas, y que `ss -ltnp` no muestra ningún puerto abierto por el proceso.
+
+  Resultado: creó la factura 8 sin ningún socket TCP ni UDP del proceso. Como esa base ya tenía las migraciones, se repitió contra un `postgres:18.6` vacío en un contenedor efímero: el cliente creó `invoices` y `schema_version` y guardó la factura 1.
+- [x] 3.3 Ejecutarlo en un contenedor `ubuntu:24.04` con Xvfb y solo los paquetes de ejecución de X11, OpenGL y fontconfig, con el ejecutable montado de solo lectura y la red del host, en modo conectado. Verificar que la captura muestra la ventana con las facturas del servidor. Anotar en `docs/architecture.md` §9.2 la lista mínima de paquetes y el tamaño del ejecutable.
+
+  Resultado: en lugar de un Xvfb dentro del contenedor, el cliente usó el Xvfb `:99` del host, con `/tmp/.X11-unix` montado de solo lectura. Lo que se comprueba es lo mismo: las librerías del ejecutable salen del contenedor. Arrancó, con glibc 2.39, y listó las facturas del servidor del host. Necesitó 60 paquetes sobre los 92 de la imagen: los de X11, xcb, xkbcommon, libglvnd, fontconfig, freetype, zlib y OpenSSL, el OpenGL de Mesa (no hay GPU) y una fuente. La lista y el tamaño (43 MB sin símbolos) están en §9.2.
+- [x] 3.4 El usuario prueba `build/dist/client` en su escritorio, en los dos modos, y da el visto bueno.

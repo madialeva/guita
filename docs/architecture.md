@@ -861,6 +861,20 @@ client. Neither the native build, the tests nor the CI need it.
   executable, copied to another directory and started with `env -i`, lists and
   creates invoices in both modes and in both languages, and looks as the native
   client does.
+- **On another distribution:** in a clean `ubuntu:24.04` container (glibc
+  2.39), drawing on the host's X display and reaching the server through the
+  host's network, it started and listed the server's invoices. It needed these
+  packages, installed with `--no-install-recommends` (60 with their
+  dependencies, on the image's 92), which a desktop already has:
+  - `libssl3t64`, `zlib1g`, `libfontconfig1` and `libfreetype6`;
+  - `libx11-6`, `libx11-xcb1`, `libxcb1`, `libxcb-glx0`, `libxcb-cursor0`,
+    `libxcb-icccm4`, `libxcb-util1`, `libxcb-image0`, `libxcb-keysyms1`,
+    `libxcb-randr0`, `libxcb-render0`, `libxcb-render-util0`, `libxcb-shm0`,
+    `libxcb-sync1`, `libxcb-xfixes0`, `libxcb-shape0`, `libxcb-xkb1`,
+    `libxkbcommon0` and `libxkbcommon-x11-0`;
+  - `libopengl0`, `libglx0` and `libegl1` (libglvnd), with an OpenGL driver:
+    `libglx-mesa0` and `libgl1-mesa-dri` on a machine without a GPU;
+  - a font, such as `fonts-dejavu-core`.
 
 ## 10. Testing
 
@@ -869,7 +883,9 @@ client. Neither the native build, the tests nor the CI need it.
 All tests use Qt Test, and Qt Quick Test for QML logic, and are registered in
 CTest; they are native only and run headless (`QT_QPA_PLATFORM=offscreen`).
 The web client's handling of dead keys is checked by hand with
-`tests/web/dead-keys.mjs` (§5.3).
+`tests/web/dead-keys.mjs` (§5.3), and the self-contained client by
+`scripts/build-static.sh` and by hand (§9.2), since the tests run without the
+static Qt.
 The backend tests link Qt only in their own executables: `core`, `api` and
 `server` stay Qt-free.
 

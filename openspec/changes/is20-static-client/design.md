@@ -202,7 +202,7 @@ La spec exige que el build nativo, las pruebas y el CI no necesiten el kit está
 ## Risks / Trade-offs
 
 - [Alguna opción de `configure` tiene otro nombre en 6.12.0, o qtdeclarative o qttools necesitan algo desactivado] → Se comprueba con `-list-features` en la tarea 1, se ajusta y se anota en la decisión 4. Widgets se volvería a activar sin que el cliente lo enlace.
-- [El estilo de Qt Quick Controls que se elige en tiempo de ejecución no queda enlazado, porque en estático solo van los plugins que encuentra `qmlimportscanner`] → La verificación compara el aspecto con el cliente nativo. Si falta, se importa el estilo de forma explícita solo en el build estático.
+- [El estilo de Qt Quick Controls que se elige en tiempo de ejecución no queda enlazado, porque en estático solo van los plugins que encuentra `qmlimportscanner`] → La verificación compara el aspecto con el cliente nativo. Si falta, se importa el estilo de forma explícita solo en el build estático. Al implementar no hizo falta: `qmlimportscanner` sigue los imports opcionales de `QtQuick.Controls` y enlaza todos los estilos, y las capturas coinciden con las del cliente nativo.
 - [El equipo destino no tiene las librerías de xcb-util (por ejemplo `libxcb-cursor0` en Ubuntu)] → Son las mismas que necesita hoy el plugin xcb del kit compartido. El contenedor de la verificación dice cuáles hay que instalar, y §9.2 las lista.
 - [El build estático se queda atrás sin que nadie lo note, porque no se compila en cada cambio] → Falla con un mensaje claro la próxima vez que se genera, y la regla de AGENTS.md cubre el caso más probable, un módulo de Qt nuevo.
 - [glibc] → Compilado en Oracle Linux 9 (2.34), no arranca en sistemas con una glibc anterior, como Ubuntu 20.04 o Debian 11. Queda documentado.
