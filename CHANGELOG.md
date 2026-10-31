@@ -70,5 +70,10 @@ First version: a proof of concept of the architecture, to be released as 0.1.0.
   the result.
 - `scripts/setup-qt.sh --desktop-only` installs only the desktop Qt kit, enough
   for the server, the desktop client and the tests.
+- Self-contained desktop client, built on demand with `scripts/build-static.sh`
+  (`static` preset): a single executable with Qt, libpq and the C++ runtime
+  linked in, which runs on other Linux machines with glibc 2.34 or later and an
+  X11 desktop without installing Qt. Its static dependencies, Qt 6.12 and libpq,
+  are built from source by `scripts/build-static-deps.sh`.
 - `scripts/check-version.sh <branch>` checks the project version against a
   `develop/vX.Y.Z` or `release/vX.Y.Z` branch.
