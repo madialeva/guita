@@ -50,6 +50,7 @@ Proof of concept (v0.1.0). See [CHANGELOG.md](CHANGELOG.md) for what each versio
 | ✅ | Web client (Qt Quick compiled to WebAssembly) served by the backend |
 | ✅ | Native desktop client connected to a remote backend |
 | ✅ | Standalone desktop mode with the backend embedded in the client |
+| ✅ | Self-contained desktop executable, with Qt linked in (built on demand) |
 | ✅ | English and Spanish user interface |
 | ⬜ | Embedded PostgreSQL for standalone mode |
 | ⬜ | User authentication |
@@ -111,7 +112,10 @@ tools and the `qttasktree` module.
 - **Server**: the libpq and zlib libraries, and a reachable PostgreSQL server
   (tested with PostgreSQL 17).
 - **Desktop client**: the Qt 6.12 libraries; in standalone mode, libpq, zlib
-  and a reachable PostgreSQL server as well.
+  and a reachable PostgreSQL server as well. The self-contained client (see
+  [Building](#building)) carries Qt, libpq and the C++ runtime inside and needs
+  only the system's libraries: glibc 2.34 or later, an X11 desktop (also under
+  XWayland), OpenGL, fontconfig and OpenSSL 3.
 - **Web client**: any current browser with WebAssembly and WebGL support.
 
 ### To test
@@ -186,6 +190,19 @@ cmake --build --preset native
 scripts/build-wasm.sh
 ```
 
+A self-contained desktop client, a single executable that can be copied to
+another Linux machine and run without installing Qt, is built on demand, as
+the web client carries Qt inside `client.wasm`. It needs a static Qt and libpq,
+built once from source in about half an hour. On Fedora and RHEL, building Qt
+also needs `xcb-util-devel`, `xcb-util-wm-devel`, `xcb-util-image-devel`,
+`xcb-util-keysyms-devel`, `xcb-util-renderutil-devel`, `xcb-util-cursor-devel`
+and `libxkbcommon-x11-devel`:
+
+```sh
+scripts/build-static-deps.sh # static Qt 6.12 and libpq 18.6 under ~/software, once
+scripts/build-static.sh      # build/dist/client, checked to need only system libraries
+```
+
 ## Running
 
 ```sh
@@ -197,6 +214,9 @@ build/native/bin/client
 
 # Desktop client in standalone mode: no server needed
 build/native/bin/client --standalone
+
+# The self-contained client takes the same options and variables, from any directory
+build/dist/client --standalone
 ```
 
 The API speaks binary Protobuf. To call it by hand, `buf curl --schema
@@ -256,7 +276,7 @@ src/proto/     client-backend contract (Protobuf)
 src/backend/   backend: core (domain, persistence), api (RPC router, HTTP), server
 src/client/    Qt/QML client, native and WebAssembly
 tests/         automated tests (Qt Test, CTest)
-scripts/       dependency setup, web build, server launcher, database SQL
+scripts/       dependency setup, web and static builds, server launcher, database SQL
 docs/          technical documentation
 openspec/      specs and change proposals: how the project is developed with OpenSpec
 ```

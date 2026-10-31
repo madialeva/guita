@@ -70,7 +70,7 @@ src/
 └── client/           Qt/QML client (native + WASM): API connection, repositories, views
     └── translations/ Qt Linguist catalogs (English source)
 tests/                automated tests (Qt Test, CTest) and their helpers in tests/support/
-scripts/              dependency setup, WASM build, server launcher, database creation SQL
+scripts/              dependency setup, WASM and static builds, server launcher, database creation SQL
 docs/                 technical documentation (architecture.md)
 ```
 
@@ -326,6 +326,12 @@ include directory; project code never relies on it.
   the local image is `postgres:18.6`.
 - Build with the `native` and `wasm` CMake presets (`scripts/build-wasm.sh`
   also copies the web files to `build/web`, the server docroot).
+- The self-contained desktop client (`static` preset, `scripts/build-static.sh`,
+  which writes `build/dist/client` and checks that it needs only libraries of
+  the operating system) is built only on demand: neither `ctest --preset
+  native`, the CI nor the end of a change need it, unless the change touches
+  the static build itself. A change that adds a Qt module adds it as well to
+  the module list of `scripts/build-static-deps.sh`, without building it.
 - GUI checks run on a virtual display (`Xvfb :99`), never on the user's desktop:
   input simulation (`xdotool`) must not reach the user's windows. In Chrome on
   Xvfb, WebGL needs `--enable-unsafe-swiftshader --use-angle=swiftshader`.

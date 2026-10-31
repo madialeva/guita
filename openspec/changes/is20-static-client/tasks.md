@@ -31,19 +31,19 @@
 
 ## 2. Build estático del cliente
 
-- [ ] 2.1 Añadir la opción `GUITA_STATIC` al `CMakeLists.txt` raíz, según la decisión 6: la comprobación de que `Qt6::Core` es estático, `-static-libstdc++ -static-libgcc` en los ejecutables y nada de `CMAKE_BUILD_RPATH` con la opción encendida. Verificar:
+- [x] 2.1 Añadir la opción `GUITA_STATIC` al `CMakeLists.txt` raíz, según la decisión 6: la comprobación de que `Qt6::Core` es estático, `-static-libstdc++ -static-libgcc` en los ejecutables y nada de `CMAKE_BUILD_RPATH` con la opción encendida. Verificar:
   - que configurar con `GUITA_STATIC=ON` contra el kit compartido, en `tmp/`, falla sin compilar nada, con un mensaje que nombra ese `Qt6_DIR` y `~/software/Qt/6.12.0-static`;
   - que `cmake --preset native` configura igual que antes y que `readelf -d build/native/bin/server` sigue mostrando el `RUNPATH` a `gcc-16.2.0`.
-- [ ] 2.2 Enlazar la libpq estática en `src/backend/CMakeLists.txt` con la opción encendida (decisión 6): comprobar que `PostgreSQL_LIBRARY` es un `.a`, y añadir `pgcommon_shlib`, `pgport_shlib` y OpenSSL a `PostgreSQL::PostgreSQL`. Verificar que el build nativo sigue enlazando la `libpq.so.5` de `/usr/pgsql-17`.
-- [ ] 2.3 Añadir los presets `static` (decisión 7) y `qt_import_plugins` en `src/client/CMakeLists.txt` con la opción encendida (decisión 6), comprobando los nombres de los targets de plugins en el kit estático. Verificar:
+- [x] 2.2 Enlazar la libpq estática en `src/backend/CMakeLists.txt` con la opción encendida (decisión 6): comprobar que `PostgreSQL_LIBRARY` es un `.a`, y añadir `pgcommon_shlib`, `pgport_shlib` y OpenSSL a `PostgreSQL::PostgreSQL`. Verificar que el build nativo sigue enlazando la `libpq.so.5` de `/usr/pgsql-17`.
+- [x] 2.3 Añadir los presets `static` (decisión 7) y `qt_import_plugins` en `src/client/CMakeLists.txt` con la opción encendida (decisión 6), comprobando los nombres de los targets de plugins en el kit estático. Verificar:
   - que `cmake --preset static` y `cmake --build --preset static` compilan el cliente;
   - que `ldd build/static/bin/client` no muestra ninguna librería de Qt, de `libstdc++`, de `libgcc_s` ni de libpq;
   - que `scripts/build-wasm.sh` sigue compilando el cliente web, porque el cambio toca `src/client`.
-- [ ] 2.4 Crear `scripts/build-static.sh` según la decisión 8, con un modo `--check <ejecutable>` que solo hace la comprobación. Verificar:
+- [x] 2.4 Crear `scripts/build-static.sh` según la decisión 8, con un modo `--check <ejecutable>` que solo hace la comprobación. Verificar:
   - que genera `build/dist/client` sin símbolos, termina sin errores y lista sus librerías `NEEDED`, todas del sistema;
   - que `scripts/build-static.sh --check build/native/bin/client` falla y nombra `libQt6Core.so.6`, `libstdc++.so.6`, `libpq.so.5` y el `RUNPATH`;
   - que con el Qt estático renombrado falla antes de configurar, remitiendo a `scripts/build-static-deps.sh`.
-- [ ] 2.5 Documentar el build estático:
+- [x] 2.5 Documentar el build estático:
   - `docs/architecture.md`: §8, los presets; §9.2, el ejecutable estático, qué sigue siendo dinámico y su comprobación; §12, la LGPL con Qt estático en escritorio (decisión 10);
   - AGENTS.md: que este build no forma parte de cada cambio, y que un módulo de Qt nuevo se añade también a `scripts/build-static-deps.sh`;
   - README: cómo obtener el ejecutable;

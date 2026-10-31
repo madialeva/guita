@@ -31,3 +31,20 @@ if(NOT EMSCRIPTEN)
     target_link_libraries(client PRIVATE api)
     target_compile_definitions(client PRIVATE APP_STANDALONE_SUPPORT)
 endif()
+
+if(GUITA_STATIC)
+    # A static Qt links its plugins into the executable, so they are fixed here:
+    # X11 with its OpenGL integrations, the input methods that compose dead keys,
+    # the desktop portal's theme, and TLS through the system's OpenSSL (loaded at run
+    # time). The client loads no images, takes no TUIO touch input, uses no network
+    # information and is not debugged through QML tooling. qmlimportscanner adds the
+    # QML modules' plugins
+    qt_import_plugins(client
+        INCLUDE_BY_TYPE platforms Qt6::QXcbIntegrationPlugin
+        INCLUDE_BY_TYPE xcbglintegrations Qt6::QXcbGlxIntegrationPlugin Qt6::QXcbEglIntegrationPlugin
+        INCLUDE_BY_TYPE platforminputcontexts
+            Qt6::QComposePlatformInputContextPlugin Qt6::QIbusPlatformInputContextPlugin
+        INCLUDE_BY_TYPE platformthemes Qt6::QXdgDesktopPortalThemePlugin
+        INCLUDE_BY_TYPE tls Qt6::QTlsBackendOpenSSLPlugin
+        EXCLUDE_BY_TYPE imageformats generic networkinformation qmltooling)
+endif()

@@ -74,7 +74,7 @@ src/
 └── client/                  Qt/QML client, native and WASM
     └── translations/        Qt Linguist catalogs
 tests/                       automated tests (§10)
-scripts/                     dependency setup, WASM build, server launcher, DB SQL
+scripts/                     dependency setup, WASM and static builds, server launcher, DB SQL
 docs/                        this document
 ```
 
@@ -760,7 +760,15 @@ mode self-contained, without external services.
     server, and speaks the same protocol to PostgreSQL 17.
 - Presets: `native` (Debug, `build/native`) and `wasm` (Release, `build/wasm`).
   `scripts/build-wasm.sh` also copies the web files to `build/web`, the docroot
-  used by `scripts/run-server.sh`.
+  used by `scripts/run-server.sh`. The `static` preset (Release,
+  `build/static`, only the `client` target, no tests) builds the self-contained
+  client of §9.2 with the static Qt and libpq first in `CMAKE_PREFIX_PATH`; it
+  does not inherit from `native`, which would put the shared kit in the search
+  path. It sets `GUITA_STATIC`, under which configuring fails early if Qt is
+  not static or libpq is not `libpq.a`, the executables link `libstdc++` and
+  `libgcc` statically without a run path, `PostgreSQL::PostgreSQL` gets the
+  libraries `libpq.a` needs (`pgcommon_shlib`, `pgport_shlib`, OpenSSL), and
+  `qt_import_plugins` fixes the Qt plugins linked into the client.
 
 ## 9. Deployment
 
@@ -809,10 +817,50 @@ and speed up later launches (the API still needs a connection).
 
 ### 9.2 Desktop
 
-Not packaged yet. The package will ship the executable with the Qt 6.12
-libraries (RUNPATH `$ORIGIN/lib`) and the Qt plugins and QML modules it uses;
-the backend libraries are linked statically or are header-only, and libpq
-comes from the system or the package.
+Not packaged yet. A package of the native build would ship the executable
+with the Qt 6.12 libraries (RUNPATH `$ORIGIN/lib`) and the Qt plugins and QML
+modules it uses; the backend libraries are linked statically or are
+header-only, and libpq comes from the system or the package.
+
+**The self-contained client.** `scripts/build-static.sh` builds on demand,
+with the `static` preset (§8), a single executable, `build/dist/client` (43 MB
+without symbols), that can be copied to another Linux machine and run there
+without installing Qt or anything from `~/software`, as the web client carries
+Qt inside `client.wasm`. It takes the same options and variables as the native
+client. Neither the native build, the tests nor the CI need it.
+
+- **Linked into it:**
+  - Qt 6.12, the static kit of §8, with the plugins that
+    `src/client/CMakeLists.txt` fixes: xcb with its GLX and EGL integrations,
+    the compose and IBus input methods (dead keys), the desktop portal's
+    theme, and the OpenSSL TLS backend;
+  - the QML modules the views import, which `qmlimportscanner` finds. They
+    include every Qt Quick Controls style, so the one chosen at run time is
+    there;
+  - the backend (`core`, `api`, `contract`, libpqxx, protobuf and abseil),
+    libpq 18.6, `libstdc++` and `libgcc`.
+- **What it still needs, all from the system:**
+  - glibc 2.34 or later, that of Oracle Linux 9, where it is built: it does
+    not start with an older one;
+  - OpenGL through libglvnd (`libOpenGL`, `libGLX`, `libEGL`) with the GPU's
+    driver or Mesa;
+  - X11 and xcb with the xcb-util libraries (cursor, icccm, image, keysyms,
+    render-util), `libxkbcommon` and `libxkbcommon-x11`. It runs under X11,
+    also through XWayland in a Wayland session;
+  - fontconfig and freetype, and zlib;
+  - OpenSSL 3 (`libssl`, `libcrypto`) for libpq, which Qt also loads for
+    `wss://`; D-Bus is loaded only when it is there.
+
+  Standalone mode still needs a reachable PostgreSQL server (§11).
+- **How it is checked:** `scripts/build-static.sh` fails, naming them, if
+  `readelf -d` shows a `RUNPATH` or `RPATH`, or a `NEEDED` library of Qt, ICU,
+  `libstdc++`, `libgcc_s`, libpq, protobuf or abseil, or if `ldd` resolves a
+  library inside `~/software` or the repository, or does not find one.
+  `scripts/build-static.sh --check <executable>` runs only that check. Since the tests run without the
+  static kit, the rest is checked by hand when the static build changes: the
+  executable, copied to another directory and started with `env -i`, lists and
+  creates invoices in both modes and in both languages, and looks as the native
+  client does.
 
 ## 10. Testing
 
@@ -965,9 +1013,14 @@ created after the first run, and the job keeps its name.
   Network, WebSockets) are LGPLv3, GPL or commercial. Using Qt
   under the LGPL is compatible with MIT and with selling the product; the
   obligations apply when builds are distributed, paid or free:
-  - **Desktop**: link Qt dynamically (as the build does) so users can replace
-    the Qt libraries, ship the LGPL text and Qt's notices, and offer Qt's
-    source code.
+  - **Desktop**: link Qt dynamically (as the native build does) so users can
+    replace the Qt libraries, ship the LGPL text and Qt's notices, and offer
+    Qt's source code. The self-contained client (§9.2) links Qt statically, as
+    the web client does, so the same applies as below: users must be able to
+    relink it with a modified Qt, which the project's public sources and the
+    scripts that build it cover; a distributed copy still ships the LGPL text
+    and Qt's notices (the static Qt installs its SBOM in
+    `~/software/Qt/6.12.0-static/sbom`) and offers Qt's source code.
   - **Web**: `client.wasm` links Qt statically, and serving it to browsers is
     distribution. The LGPL then requires letting users relink the client with
     a modified Qt (for example by publishing the client's sources or object
