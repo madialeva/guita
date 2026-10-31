@@ -311,9 +311,17 @@ include directory; project code never relies on it.
   Anything managed by `uv` (the Python ≥ 3.10 that Emscripten needs,
   `~/.local/bin/python3.12`) stays in uv's standard location; `EMSDK_PYTHON`
   must point to it, also after sourcing `emsdk_env.sh`, which clears it.
+- Only for the on-demand self-contained desktop client (`docs/architecture.md`
+  §9.2), `scripts/build-static-deps.sh` builds from sources kept in
+  `~/software/src`, with that GCC, a static Qt 6.12.0 in
+  `~/software/Qt/6.12.0-static` (qtbase, qtshadertools, qtdeclarative,
+  qtwebsockets and the Linguist tools of qttools; X11 only) and a static libpq
+  of PostgreSQL 18.6 in `~/software/libpq-18.6-static`.
 - System packages: a C++ compiler to build GCC (gcc-toolset-14 on EL9, whose
   binutils that GCC keeps using), CMake ≥ 3.25, zlib, `libpq5-devel`,
-  PostgreSQL.
+  PostgreSQL. The static Qt also needs the development packages of xcb-util
+  (`xcb-util-devel`, `-wm`, `-image`, `-keysyms`, `-renderutil`, `-cursor`)
+  and `libxkbcommon-x11-devel`.
 - Docker (the user may run it without sudo) for the ephemeral test PostgreSQL;
   the local image is `postgres:18.6`.
 - Build with the `native` and `wasm` CMake presets (`scripts/build-wasm.sh`

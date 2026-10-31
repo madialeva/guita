@@ -657,6 +657,8 @@ mode self-contained, without external services.
 | buf | 1.74.0 | `scripts/build-deps.sh` (binary, checked against its release checksums) |
 | libpq, zlib | system | system development packages |
 | PostgreSQL | 17 tested | system |
+| Qt, static (qtbase, qtshadertools, qtdeclarative, qtwebsockets and the Linguist tools of qttools), only for the self-contained client (§9.2) | 6.12.0 | `scripts/build-static-deps.sh` (Qt's sources, GCC 16, X11 only) |
+| libpq, static, only for the self-contained client (§9.2) | 18.6 | `scripts/build-static-deps.sh` (PostgreSQL's sources, client part only) |
 
 - Node.js 22 or later is needed only for the manual check of the web
   client's dead keys, `tests/web/dead-keys.mjs` (§5.3).
@@ -723,6 +725,39 @@ mode self-contained, without external services.
   with the native `protoc` (`GUITA_HOST_PROTOBUF_DIR`).
 - Emscripten needs Python ≥ 3.10 (`EMSDK_PYTHON`, set by the `wasm` preset and
   `scripts/build-wasm.sh`; `emsdk_env.sh` clears it).
+- **The static dependencies** of the self-contained desktop client (§9.2) are
+  built on demand by `scripts/build-static-deps.sh`, never by the CI or the
+  other scripts. It keeps their sources in `~/software/src` and checks every
+  download against the SHA-256 its server publishes (`<file>.sha256` on
+  download.qt.io and ftp.postgresql.org; Qt's tarballs are not signed). Both
+  are built with GCC 16, and Qt's build tools get the same run path as `protoc`.
+  - **Qt 6.12.0, static**, in `~/software/Qt/6.12.0-static`: the five modules
+    the client needs, compiled in order against that prefix
+    (`qt-configure-module`). Every feature that would otherwise depend on the
+    `-devel` packages installed is fixed, so the result does not change with
+    them. Only X11 (xcb, with its GLX and EGL integrations), without Wayland or
+    the embedded backends. Qt's own copies of PCRE2, HarfBuzz, libpng, libjpeg,
+    double-conversion, libb2 and md4c, which not every desktop has, and the
+    system's zlib, freetype, fontconfig, OpenGL and X11 libraries. OpenSSL and
+    D-Bus are loaded at run time (`-openssl-runtime`,
+    `-no-feature-dbus-linked`: `-dbus-runtime` does not reach CMake in 6.12.0).
+    No ICU (Qt has its own CLDR data), GLib, Widgets, SQL, printing, session
+    management, GSSAPI, Brotli or zstd; qttools builds only its Linguist tools.
+    Qt keeps its default C++ standard: unlike abseil's, Qt's ABI does not depend
+    on the standard of the application. Building it with X11 needs the
+    development packages of xcb-util (`xcb-util`, `-wm`, `-image`, `-keysyms`,
+    `-renderutil`, `-cursor`) and of `libxkbcommon-x11`, besides those of
+    OpenSSL, libxcb, libxkbcommon, fontconfig, freetype, Mesa (GL and EGL), X11
+    and zlib. It takes about half an hour with 12 cores (25 minutes on the
+    development machine), and several GB for the build trees, removed at the
+    end; the installed Qt takes 1.1 GB, and its tarballs and sources 0.8 GB.
+  - **libpq of PostgreSQL 18.6, static**, in `~/software/libpq-18.6-static`:
+    PostgreSQL's client-only installation with `configure` (headers, libpq,
+    the common and port libraries libpq needs, and `pg_config`), with
+    `--with-ssl=openssl --without-icu --without-readline --without-zlib`.
+    GSSAPI and LDAP are off by default. The shared libpq is removed, so
+    `FindPostgreSQL` can only find `libpq.a`. 18.6 is the release of the test
+    server, and speaks the same protocol to PostgreSQL 17.
 - Presets: `native` (Debug, `build/native`) and `wasm` (Release, `build/wasm`).
   `scripts/build-wasm.sh` also copies the web files to `build/web`, the docroot
   used by `scripts/run-server.sh`.
