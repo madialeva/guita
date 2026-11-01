@@ -657,7 +657,7 @@ mode self-contained, without external services.
 | buf | 1.74.0 | `scripts/build-deps.sh` (binary, checked against its release checksums) |
 | libpq, zlib | system | system development packages |
 | PostgreSQL | 17 tested | system |
-| Qt, static (qtbase, qtshadertools, qtdeclarative, qtwebsockets and the Linguist tools of qttools), only for the self-contained client (§9.2) | 6.12.0 | `scripts/build-static-deps.sh` (Qt's sources, GCC 16, X11 only) |
+| Qt, static (qtbase with Qt SQL and SQLite, qtshadertools, qtsvg, qtdeclarative, qtwebsockets and the Linguist tools of qttools), only for the self-contained client (§9.2), shared with gambasse | 6.12.0 | `scripts/build-static-deps.sh` (Qt's sources, GCC 16, X11 only) |
 | libpq, static, only for the self-contained client (§9.2) | 18.6 | `scripts/build-static-deps.sh` (PostgreSQL's sources, client part only) |
 
 - Node.js 22 or later is needed only for the manual check of the web
@@ -731,26 +731,35 @@ mode self-contained, without external services.
   download against the SHA-256 its server publishes (`<file>.sha256` on
   download.qt.io and ftp.postgresql.org; Qt's tarballs are not signed). Both
   are built with GCC 16, and Qt's build tools get the same run path as `protoc`.
-  - **Qt 6.12.0, static**, in `~/software/Qt/6.12.0-static`: the five modules
-    the client needs, compiled in order against that prefix
-    (`qt-configure-module`). Every feature that would otherwise depend on the
-    `-devel` packages installed is fixed, so the result does not change with
-    them. Only X11 (xcb, with its GLX and EGL integrations), without Wayland or
-    the embedded backends. Qt's own copies of PCRE2, HarfBuzz, libpng, libjpeg,
-    double-conversion, libb2 and md4c, which not every desktop has, and the
+  - **Qt 6.12.0, static**, in `~/software/Qt/6.12.0-static`: one kit shared
+    with gambasse, the maintainer's other Qt project, whose
+    `scripts/build-static-deps.sh` carries the same Qt block (between markers,
+    checked with `diff`). It has the union of what both use: the five modules
+    the client needs plus qtsvg and, in qtbase, Qt SQL with the SQLite driver
+    on Qt's own copy of SQLite (every other driver off), which the client does
+    not link. The six modules are compiled in order against that prefix
+    (`qt-configure-module`), qtsvg before qtdeclarative, an optional
+    dependency of it. A kit that lacks a module of the list is removed and
+    built again whole, after every download is checked: modules built against
+    another configuration of qtbase must not be mixed. Every feature that
+    would otherwise depend on the `-devel` packages installed is fixed, so the
+    result does not change with them. Only X11 (xcb, with its GLX and EGL
+    integrations), without Wayland or the embedded backends. Qt's own copies of
+    PCRE2, HarfBuzz, libpng, libjpeg, double-conversion, libb2 and md4c, which
+    not every desktop has, and the
     system's zlib, freetype, fontconfig, OpenGL and X11 libraries. OpenSSL and
     D-Bus are loaded at run time (`-openssl-runtime`,
     `-no-feature-dbus-linked`: `-dbus-runtime` does not reach CMake in 6.12.0).
-    No ICU (Qt has its own CLDR data), GLib, Widgets, SQL, printing, session
+    No ICU (Qt has its own CLDR data), GLib, Widgets, printing, session
     management, GSSAPI, Brotli or zstd; qttools builds only its Linguist tools.
     Qt keeps its default C++ standard: unlike abseil's, Qt's ABI does not depend
     on the standard of the application. Building it with X11 needs the
     development packages of xcb-util (`xcb-util`, `-wm`, `-image`, `-keysyms`,
     `-renderutil`, `-cursor`) and of `libxkbcommon-x11`, besides those of
     OpenSSL, libxcb, libxkbcommon, fontconfig, freetype, Mesa (GL and EGL), X11
-    and zlib. It takes about half an hour with 12 cores (25 minutes on the
+    and zlib. It takes about half an hour with 12 cores (27 minutes on the
     development machine), and several GB for the build trees, removed at the
-    end; the installed Qt takes 1.1 GB, and its tarballs and sources 0.8 GB.
+    end; the installed Qt takes 1.2 GB, and its tarballs and sources 0.8 GB.
   - **libpq of PostgreSQL 18.6, static**, in `~/software/libpq-18.6-static`:
     PostgreSQL's client-only installation with `configure` (headers, libpq,
     the common and port libraries libpq needs, and `pg_config`), with

@@ -314,9 +314,12 @@ include directory; project code never relies on it.
 - Only for the on-demand self-contained desktop client (`docs/architecture.md`
   §9.2), `scripts/build-static-deps.sh` builds from sources kept in
   `~/software/src`, with that GCC, a static Qt 6.12.0 in
-  `~/software/Qt/6.12.0-static` (qtbase, qtshadertools, qtdeclarative,
-  qtwebsockets and the Linguist tools of qttools; X11 only) and a static libpq
-  of PostgreSQL 18.6 in `~/software/libpq-18.6-static`.
+  `~/software/Qt/6.12.0-static` (qtbase with Qt SQL and SQLite, qtshadertools,
+  qtsvg, qtdeclarative, qtwebsockets and the Linguist tools of qttools; X11
+  only) and a static libpq of PostgreSQL 18.6 in
+  `~/software/libpq-18.6-static`. The Qt kit is shared with gambasse: the Qt
+  block of that script (modules and options, between its markers) is the same
+  text in both repositories, and changes in both together.
 - System packages: a C++ compiler to build GCC (gcc-toolset-14 on EL9, whose
   binutils that GCC keeps using), CMake ≥ 3.25, zlib, `libpq5-devel`,
   PostgreSQL. The static Qt also needs the development packages of xcb-util
@@ -331,7 +334,8 @@ include directory; project code never relies on it.
   the operating system) is built only on demand: neither `ctest --preset
   native`, the CI nor the end of a change need it, unless the change touches
   the static build itself. A change that adds a Qt module adds it as well to
-  the module list of `scripts/build-static-deps.sh`, without building it.
+  the module list of `scripts/build-static-deps.sh`, in both repositories,
+  without building it.
 - GUI checks run on a virtual display (`Xvfb :99`), never on the user's desktop:
   input simulation (`xdotool`) must not reach the user's windows. In Chrome on
   Xvfb, WebGL needs `--enable-unsafe-swiftshader --use-angle=swiftshader`.
@@ -383,12 +387,15 @@ Each OpenSpec change is tracked on GitHub with this cycle:
 
 1. OpenSpec proposal approved by the user.
 2. GitHub issue for the change, linking its `openspec/changes/<name>/`
-   folder (plus its milestone once milestones exist; the Projects board stays
-   light: Todo / In progress / Done). While active, the change folder is named
-   `is<n>-<slug>` after its issue; the date prefix is added only when the
-   change is archived.
+   folder (plus its milestone once milestones exist). While active, the change
+   folder is named `is<n>-<slug>` after its issue; the date prefix is added
+   only when the change is archived. The `Guita` Projects board, linked to the
+   repository, stays light (Todo / In Progress / Done): GitHub adds every new
+   issue to Todo, and moves it to Done when it is closed.
 3. Branch created from the issue (Development panel → "Create a branch";
-   name like `change/is<n>-<slug>`) starting from `develop/vX.Y.Z`.
+   name like `change/is<n>-<slug>`) starting from `develop/vX.Y.Z`. Creating
+   the branch also moves the issue to In Progress on the board
+   (`gh project item-edit`): no GitHub workflow does it.
 4. Implementation on the branch + push (pushes are done by the user; the
    agent has no SSH access to `origin` from its shell). Commits are partial,
    one per task group of `tasks.md`, so that no commit is huge and the branch
@@ -420,4 +427,5 @@ Each OpenSpec change is tracked on GitHub with this cycle:
 7. Merge commit as the norm (no squash): the per-group commits land on the
    development branch as they are, so its history keeps following the tasks
    of each change, and the merge commit marks where the change ends. Merged PR
-   = closed issue (automatic via `Closes`) = archived change.
+   = closed issue (automatic via `Closes`) = Done on the board = archived
+   change.
