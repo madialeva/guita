@@ -11,18 +11,21 @@
 #   scripts/build-static.sh --check <executable>  only check <executable>
 #
 # On demand only: the native build, the tests and the CI do not need it. The static
-# Qt and libpq come from scripts/build-static-deps.sh, which runs first.
+# Qt and libpq come from the qt-static and libpq-static components of toolchain-cpp,
+# installed first.
 #
 # Variables:
-#   SOFTWARE_DIR         root of the local dependencies  [~/software]
+#   SOFTWARE_DIR         the installation directory of toolchain-cpp, cloned next to
+#                        guita                          [../toolchain-cpp/software]
 #   QT_VERSION           static Qt release               [6.12.0]
 #   POSTGRESQL_VERSION   release of the static libpq     [18.6]
 set -euo pipefail
 
-SOFTWARE_DIR="${SOFTWARE_DIR:-$HOME/software}"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# Without "..": the check compares it with the real paths ldd resolves
+SOFTWARE_DIR="${SOFTWARE_DIR:-$(cd "$ROOT/.." && pwd)/toolchain-cpp/software}"
 QT_VERSION="${QT_VERSION:-6.12.0}"
 POSTGRESQL_VERSION="${POSTGRESQL_VERSION:-18.6}"
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 usage() {
     echo "usage: $0 [--check <executable>]" >&2
@@ -70,8 +73,8 @@ esac
 qt_dir="$SOFTWARE_DIR/Qt/$QT_VERSION-static"
 libpq_dir="$SOFTWARE_DIR/libpq-$POSTGRESQL_VERSION-static"
 if [[ ! -d "$qt_dir/lib/cmake/Qt6LinguistTools" || ! -f "$libpq_dir/lib/libpq.a" ]]; then
-    echo "error: no static Qt in $qt_dir or no static libpq in $libpq_dir: run" \
-         "scripts/build-static-deps.sh first" >&2
+    echo "error: no static Qt in $qt_dir or no static libpq in $libpq_dir: install" \
+         "them with toolchain-cpp (install.sh qt-static libpq-static)" >&2
     exit 1
 fi
 

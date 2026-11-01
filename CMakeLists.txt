@@ -8,15 +8,15 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # docs/architecture.md §9.2): Qt, libpq and the C++ runtime linked into the executable
 option(GUITA_STATIC "Link Qt, libpq and the C++ runtime statically into the native executables" OFF)
 
-# The native compiler: GCC 16 or later, with C++26 reflection (scripts/build-gcc.sh,
-# docs/architecture.md §8), checked before anything is searched or built. The web
+# The native compiler: GCC 16 or later, with C++26 reflection (the gcc component of
+# toolchain-cpp, docs/architecture.md §8), checked before anything is searched or built. The web
 # client is built by the Clang of the emsdk that Qt requires
 if(NOT EMSCRIPTEN)
     if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_VERSION VERSION_LESS 16)
         message(FATAL_ERROR
             "Found ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION} (${CMAKE_CXX_COMPILER}), "
-            "but the native build needs GCC 16 or later with C++26 reflection: build it with "
-            "scripts/build-gcc.sh and configure with the native preset, which uses it")
+            "but the native build needs GCC 16 or later with C++26 reflection: install the gcc "
+            "component of toolchain-cpp and configure with the native preset, which uses it")
     endif()
     include(CheckCXXSourceCompiles)
     set(CMAKE_REQUIRED_FLAGS -freflection)
@@ -25,7 +25,7 @@ if(NOT EMSCRIPTEN)
     if(NOT GUITA_HAS_REFLECTION)
         message(FATAL_ERROR
             "${CMAKE_CXX_COMPILER} (GCC ${CMAKE_CXX_COMPILER_VERSION}) does not accept "
-            "-std=c++26 -freflection, which the native build needs: use the GCC of scripts/build-gcc.sh")
+            "-std=c++26 -freflection, which the native build needs: use the GCC of toolchain-cpp")
     endif()
 
     if(GUITA_STATIC)
@@ -50,14 +50,14 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin)
 # Project headers are included from src/: <backend/...>, <client/...>
 set(GUITA_INCLUDE_ROOT ${PROJECT_SOURCE_DIR}/src)
 
-# Qt 6.12 LTS everywhere: desktop and WASM kits in ~/software/Qt (see docs/architecture.md)
+# Qt 6.12 LTS everywhere: desktop and WASM kits of toolchain-cpp (see docs/architecture.md)
 find_package(Qt6 6.12 REQUIRED COMPONENTS Core Gui Qml Quick WebSockets LinguistTools)
 if(GUITA_STATIC)
     get_target_property(GUITA_QT_CORE_TYPE Qt6::Core TYPE)
     if(NOT GUITA_QT_CORE_TYPE STREQUAL "STATIC_LIBRARY")
         message(FATAL_ERROR
-            "GUITA_STATIC needs a static Qt, but the Qt found in ${Qt6_DIR} is shared: build "
-            "the static one in ~/software/Qt/6.12.0-static with scripts/build-static-deps.sh "
+            "GUITA_STATIC needs a static Qt, but the Qt found in ${Qt6_DIR} is shared: install "
+            "the static one, Qt/6.12.0-static, with the qt-static component of toolchain-cpp "
             "and configure with the static preset, which uses it")
     endif()
 endif()

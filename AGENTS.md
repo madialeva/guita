@@ -35,14 +35,14 @@ Principles that every change must keep:
 Use C++26, Qt Quick (QML), cpp-httplib, libpqxx 8, Protobuf, PostgreSQL, CMake,
 Ninja and GCC 16. The backend uses no framework and no ORM. Qt is
 6.12 LTS everywhere (desktop kit for the native client, `wasm_singlethread` kit
-for the web client, both from `~/software/Qt`; CMake requires 6.12): never add
+for the web client, both from toolchain-cpp; CMake requires 6.12): never add
 code paths or workarounds for other Qt versions, and never build against the
 system Qt. Do not introduce Qt Widgets or new production dependencies without
 an approved OpenSpec change.
 
 Every build is C++26 with two compilers: the native side (backend, desktop
 client, tests and measurements) with GCC 16.2.0 built from the GNU sources
-(`scripts/build-gcc.sh`, the same release and options as the CI's
+(the `gcc` component of toolchain-cpp, the same release and options as the CI's
 `gcc:16.2.0-trixie` image), and the web client with the Clang of the emsdk that
 Qt requires. The same client code goes through both, so `src/client` (and the
 contract it shares) uses only what that Clang and its libc++ support
@@ -70,7 +70,7 @@ src/
 └── client/           Qt/QML client (native + WASM): API connection, repositories, views
     └── translations/ Qt Linguist catalogs (English source)
 tests/                automated tests (Qt Test, CTest) and their helpers in tests/support/
-scripts/              dependency setup, WASM and static builds, server launcher, database creation SQL
+scripts/              WASM and static builds, server launcher, checks, database creation SQL
 docs/                 technical documentation (architecture.md)
 ```
 
@@ -214,18 +214,14 @@ context properties, `qmlRegister*` calls or objects injected from `main.cpp`:
   the library the code under test uses.
 - Keep the suite table in `docs/architecture.md` (§10.3) up to date.
 - The CI (`.github/workflows/ci.yml`, GitHub Actions) runs inside the
-  official `gcc:16.2.0-trixie` image, the same GCC as `scripts/build-gcc.sh`
-  installs locally (a step fails the job when they differ), and runs the same
-  `ctest --preset native` against a `postgres:18.6` service container reached
-  by name in `GUITA_TEST_DB`, with the toolchain of `scripts/setup-qt.sh
-  --desktop-only` and `scripts/build-deps.sh`, cached on the hash of both
-  scripts. A new system dependency also goes to the workflow's `apt` list (of
-  Debian trixie); it is described in `docs/architecture.md` §10.4. A new GCC
-  version changes at once in `scripts/build-gcc.sh`, `scripts/build-deps.sh`,
-  `scripts/build-static-deps.sh`, `scripts/build-gcc-mingw.sh` (the Windows
-  cross compiler, rebuilt with it), the presets that set the compiler
-  (`native` and `static`) and the CI workflow (its image, the link to it in
-  `~/software` and its cache keys).
+  official `gcc:16.2.0-trixie` image, the same GCC as toolchain-cpp's `gcc`
+  component builds locally (a step fails the job when they differ), and runs
+  the same `ctest --preset native` against a `postgres:18.6` service container
+  reached by name in `GUITA_TEST_DB`. toolchain-cpp is checked out next to
+  guita at the version guita pins (`TOOLCHAIN_CPP_REF` in the workflow), its
+  native-build components installed (`TOOLCHAIN_CPP_COMPONENTS`) and cached on
+  that version. A new system dependency also goes to the workflow's `apt`
+  list (of Debian trixie); it is described in `docs/architecture.md` §10.4.
 - `tests/web/dead-keys.mjs` checks by hand, outside `ctest`, that the web
   client composes accents typed with dead keys (`docs/architecture.md` §5.3);
   repeat it when Qt is upgraded.
@@ -299,42 +295,31 @@ include directory; project code never relies on it.
 
 ## Local environment
 
-- Dependencies that do not come from the system are installed without sudo in
-  `~/software` (`SOFTWARE_DIR` in the scripts; the CMake presets assume
-  `~/software`): GCC 16.2.0 (`scripts/build-gcc.sh`, which runs first; its
-  `libstdc++` is newer than the system's, so the native executables carry a run
-  path to it), libpqxx 8.0.2, cpp-httplib 0.61.0, protobuf
-  36.2 (with abseil; the native libraries are built with that GCC, all in C++26;
-  protobuf also for WebAssembly in
-  `~/software/protobuf-36.2-wasm`, with the emsdk of `setup-qt.sh`, which runs
-  first) and buf 1.74.0 (`scripts/build-deps.sh`),
-  Qt 6.12.0 desktop + WASM and
-  emsdk 5.0.5 (`scripts/setup-qt.sh`). The emsdk version is the one the Qt WASM
-  kit recommends (`QT_EMCC_RECOMMENDED_VERSION`); upgrade both together.
-  Anything managed by `uv` (the Python ≥ 3.10 that Emscripten needs,
+- The toolchain comes from [toolchain-cpp](https://github.com/madialeva/toolchain-cpp),
+  cloned next to guita (`~/src/toolchain-cpp`) at the version guita pins,
+  **v0.1.0**, which installs it without sudo in its `software/` directory:
+  - `gcc qt libpqxx cpp-httplib protobuf buf` for the native build and the
+    tests;
+  - `qt-wasm protobuf-wasm` for the web client;
+  - `qt-static libpq-static` for the self-contained client;
+  - `gcc-mingw` for Windows (#29).
+
+  guita has no script that builds them. The presets name them from
+  `${sourceParentDir}/toolchain-cpp/software` (not `${sourceDir}/..`, which
+  hides the host's Linguist tools from the WebAssembly build), and the scripts
+  take `SOFTWARE_DIR`, by default that directory, normalized. How each
+  component is built is in toolchain-cpp's `docs/toolchain.md`; what guita
+  requires of them, in `docs/architecture.md` §8.
+- A new toolchain-cpp version changes at once in the workflow
+  (`TOOLCHAIN_CPP_REF`, and the image if it brings another GCC), the presets'
+  prefixes (if they change, a MAJOR version of toolchain-cpp), the README and
+  this file. A Qt module or a library guita needs is added to toolchain-cpp's
+  components, in a change of that repository.
+- Anything managed by `uv` (the Python ≥ 3.10 that Emscripten needs,
   `~/.local/bin/python3.12`) stays in uv's standard location; `EMSDK_PYTHON`
   must point to it, also after sourcing `emsdk_env.sh`, which clears it.
-- Only for the on-demand self-contained desktop client (`docs/architecture.md`
-  §9.2), `scripts/build-static-deps.sh` builds from sources kept in
-  `~/software/src`, with that GCC, a static Qt 6.12.0 in
-  `~/software/Qt/6.12.0-static` (qtbase with Qt SQL and SQLite, qtshadertools,
-  qtsvg, qtdeclarative, qtwebsockets and the Linguist tools of qttools; X11
-  only) and a static libpq of PostgreSQL 18.6 in
-  `~/software/libpq-18.6-static`. The Qt kit is shared with gambasse: the Qt
-  block of that script (modules and options, between its markers) is the same
-  text in both repositories, and changes in both together.
-- Only to build for Windows (the base of a self-contained Windows client),
-  `scripts/build-gcc-mingw.sh` builds with that GCC, from signed sources kept
-  in `~/software/src`, a GCC 16.2.0 cross compiler for `x86_64-w64-mingw32` in
-  `~/software/gcc-16.2.0-mingw`, with binutils 2.47 and mingw-w64 14.0.0
-  (`docs/architecture.md` §8). Like the self-contained client, it is built
-  only on demand: neither `ctest --preset native`, the CI nor the end of a
-  change need it, unless the change touches that script.
-- System packages: a C++ compiler to build GCC (gcc-toolset-14 on EL9, whose
-  binutils that GCC keeps using), CMake ≥ 3.25, zlib, `libpq5-devel`,
-  PostgreSQL. The static Qt also needs the development packages of xcb-util
-  (`xcb-util-devel`, `-wm`, `-image`, `-keysyms`, `-renderutil`, `-cursor`)
-  and `libxkbcommon-x11-devel`.
+- System packages: CMake ≥ 3.25, Ninja, zlib, `libpq5-devel`, PostgreSQL, and
+  what toolchain-cpp's components need (its README and `docs/toolchain.md`).
 - Docker (the user may run it without sudo) for the ephemeral test PostgreSQL;
   the local image is `postgres:18.6`.
 - Build with the `native` and `wasm` CMake presets (`scripts/build-wasm.sh`
@@ -344,8 +329,7 @@ include directory; project code never relies on it.
   the operating system) is built only on demand: neither `ctest --preset
   native`, the CI nor the end of a change need it, unless the change touches
   the static build itself. A change that adds a Qt module adds it as well to
-  the module list of `scripts/build-static-deps.sh`, in both repositories,
-  without building it.
+  the module list of toolchain-cpp's `qt-static` component.
 - GUI checks run on a virtual display (`Xvfb :99`), never on the user's desktop:
   input simulation (`xdotool`) must not reach the user's windows. In Chrome on
   Xvfb, WebGL needs `--enable-unsafe-swiftshader --use-angle=swiftshader`.

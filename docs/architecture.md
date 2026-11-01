@@ -74,7 +74,7 @@ src/
 └── client/                  Qt/QML client, native and WASM
     └── translations/        Qt Linguist catalogs
 tests/                       automated tests (§10)
-scripts/                     dependency setup, WASM and static builds, server launcher, DB SQL
+scripts/                     WASM and static builds, server launcher, checks, DB SQL
 docs/                        this document
 ```
 
@@ -644,48 +644,67 @@ mode self-contained, without external services.
 
 ## 8. Toolchain
 
-| Component | Version | Source |
+guita does not build its toolchain: it takes it from
+[toolchain-cpp](https://github.com/madialeva/toolchain-cpp) **v0.1.0**, cloned
+next to guita, which builds each piece as a component without root privileges
+into its `software/` directory. How each component is built, with which options
+and why, is in toolchain-cpp's
+[`docs/toolchain.md`](https://github.com/madialeva/toolchain-cpp/blob/v0.1.0/docs/toolchain.md);
+this section describes what guita uses and requires of it.
+
+| What | Version | toolchain-cpp component |
 |---|---|---|
-| GCC, the native compiler (C++26 with reflection) | 16.2.0 | `scripts/build-gcc.sh` (GNU sources, configured as the CI's `gcc:16.2.0-trixie` image) |
+| GCC, the native compiler (C++26 with reflection) | 16.2.0 | `gcc` (GNU sources, configured as the CI's `gcc:16.2.0-trixie` image) |
+| Qt (desktop), with `qttasktree` and `qtwebsockets` | 6.12.0 LTS | `qt` (aqtinstall) |
+| Qt (`wasm_singlethread`), Emscripten | 6.12.0 LTS, 5.0.5 | `qt-wasm` (aqtinstall, emsdk) |
+| libpqxx | 8.0.2 (requires C++20) | `libpqxx` (static, PIC, C++26) |
+| cpp-httplib | 0.61.0 | `cpp-httplib` (header-only, with zlib) |
+| protobuf (with abseil) | 36.2 | `protobuf` (static, PIC, C++26; also the host `protoc`) |
+| protobuf (with abseil) for WebAssembly | 36.2 | `protobuf-wasm` (static, C++26, no `protoc`) |
+| buf | 1.74.0 | `buf` |
+| Qt, static, only for the self-contained client (§9.2) | 6.12.0 | `qt-static` (one kit for every project, X11 only) |
+| libpq, static, only for the self-contained client (§9.2) | 18.6 | `libpq-static` (client part only) |
+| GCC cross compiler for 64-bit Windows, only for building for Windows | 16.2.0 | `gcc-mingw` |
 | CMake | 3.25+ | system |
-| Qt (desktop + `wasm_singlethread`), with `qttasktree` and `qtwebsockets` | 6.12.0 LTS | `scripts/setup-qt.sh` (aqtinstall) |
-| Emscripten | 5.0.5 | `scripts/setup-qt.sh` (emsdk) |
-| libpqxx | 8.0.2 (requires C++20) | `scripts/build-deps.sh` (static, PIC, C++26) |
-| cpp-httplib | 0.61.0 | `scripts/build-deps.sh` (header-only, with zlib) |
-| protobuf (with abseil) | 36.2 | `scripts/build-deps.sh` (static, PIC, C++26; also the host `protoc`) |
-| protobuf (with abseil) for WebAssembly | 36.2 | `scripts/build-deps.sh` with emsdk (static, C++26, no `protoc`) |
-| buf | 1.74.0 | `scripts/build-deps.sh` (binary, checked against its release checksums) |
 | libpq, zlib | system | system development packages |
 | PostgreSQL | 17 tested | system |
-| Qt, static (qtbase with Qt SQL and SQLite, qtshadertools, qtsvg, qtdeclarative, qtwebsockets and the Linguist tools of qttools), only for the self-contained client (§9.2), shared with gambasse | 6.12.0 | `scripts/build-static-deps.sh` (Qt's sources, GCC 16, X11 only) |
-| libpq, static, only for the self-contained client (§9.2) | 18.6 | `scripts/build-static-deps.sh` (PostgreSQL's sources, client part only) |
-| GCC cross compiler for 64-bit Windows (`x86_64-w64-mingw32`), C and C++, with binutils and mingw-w64, only for building for Windows | 16.2.0, binutils 2.47, mingw-w64 14.0.0 | `scripts/build-gcc-mingw.sh` (signed sources, built with the native GCC) |
 
+- **Where it lives.** toolchain-cpp is cloned next to guita
+  (`~/src/toolchain-cpp` beside `~/src/guita`). The presets name its prefixes
+  from `${sourceParentDir}/toolchain-cpp/software` (`gcc-16.2.0`,
+  `Qt/6.12.0/gcc_64`, `protobuf-36.2`, ...), with no environment variables; not
+  from `${sourceDir}/..`, because the WebAssembly build does not find the
+  host's Linguist tools through a `QT_HOST_PATH` with `..`. The scripts take
+  `SOFTWARE_DIR`, by default that directory, normalized: `build-static.sh`
+  compares it with the real paths `ldd` resolves. With toolchain-cpp elsewhere,
+  a `CMakeUserPresets.json` and `SOFTWARE_DIR` point to it.
+- **Which components.** `gcc qt libpqxx cpp-httplib protobuf buf` for the
+  server, the desktop client, the tests and the measurements (also in the CI,
+  §10.4); `qt-wasm protobuf-wasm` for the web client; `qt-static libpq-static`
+  for the self-contained client.
+- **The pinned version.** guita pins toolchain-cpp's version in the CI
+  (`TOOLCHAIN_CPP_REF`) and in its documentation. A new version changes them
+  together, with the presets' prefixes if they change (a MAJOR version of
+  toolchain-cpp) and the CI image if it brings another GCC.
 - Node.js 22 or later is needed only for the manual check of the web
   client's dead keys, `tests/web/dead-keys.mjs` (§5.3).
 - **The native compiler** (server, desktop client, tests and measurements) is
-  GCC 16.2.0 built from the GNU sources by `scripts/build-gcc.sh`, configured
-  as the official `gcc:16.2.0-trixie` image the CI runs in (§10.4):
-  `--disable-multilib`, full bootstrap, C and C++ only. The local compiler and
-  the CI's are therefore the same release with the same defaults (upstream
-  GCC enables neither PIE nor the stack protector by default, unlike
-  distribution packages). The script also fixes the `as` and `ld` found in the
-  PATH (`--with-as`, `--with-ld`), so that a later change of PATH does not give
-  that GCC other binutils than the ones it was configured with. The `native`
+  toolchain-cpp's GCC 16.2.0, configured as the official `gcc:16.2.0-trixie`
+  image the CI runs in (§10.4), so the local compiler and the CI's are the same
+  release with the same defaults (upstream GCC enables neither PIE nor the
+  stack protector by default, unlike distribution packages). The `native`
   preset sets it as `CMAKE_CXX_COMPILER`, and configuring fails early, before
   looking for Qt, with any compiler that is not GCC 16 or later accepting
   `-std=c++26 -freflection`. Reflection is not enabled on any target yet.
-  `scripts/build-deps.sh` builds the native libraries with that GCC, so
-  `scripts/build-gcc.sh` runs first.
 - **The run path to GCC 16's `libstdc++`.** It is newer than the system's
   (`GLIBCXX_3.4.29` on EL9), so the native executables carry a run path to its
-  directory: the project's through `CMAKE_BUILD_RPATH`, and `protoc` through
-  `-Wl,-rpath` in `scripts/build-deps.sh`. They start without
-  `LD_LIBRARY_PATH`, and the Qt libraries they load share that `libstdc++`,
-  which is backward compatible with the one Qt was built against. Linking it
-  statically would leave two standard libraries in one process, the static one
-  and the shared one Qt loads. The run path is absolute: development builds
-  are not relocatable, which desktop packaging will have to address (§9.2).
+  directory through `CMAKE_BUILD_RPATH`, as toolchain-cpp's own executables
+  (`protoc`, the static Qt's tools) do. They start without `LD_LIBRARY_PATH`,
+  and the Qt libraries they load share that `libstdc++`, which is backward
+  compatible with the one Qt was built against. Linking it statically would
+  leave two standard libraries in one process, the static one and the shared
+  one Qt loads. The run path is absolute: development builds are not
+  relocatable, which desktop packaging will have to address (§9.2).
 - **What the client may use.** The web client is built by the Clang of emsdk
   5.0.5 (Clang 23, a development snapshot), also in C++26 (`-std=gnu++26`).
   The client code goes through both compilers, so it uses only what that Clang
@@ -701,140 +720,35 @@ mode self-contained, without external services.
   The emsdk version follows Qt (next point), so this changes only when Qt is
   upgraded. The CI does not build the web client yet, so a change to
   `src/client` builds the `wasm` preset locally as well.
-- The scripts install the non-system dependencies (GCC, Qt, emsdk, libpqxx,
-  cpp-httplib, protobuf, buf) without root privileges under `$SOFTWARE_DIR` (default
-  `~/software`), which is where the CMake presets look for them; with other
-  locations, pass `CMAKE_PREFIX_PATH` or use a `CMakeUserPresets.json`.
-  `scripts/setup-qt.sh --desktop-only` installs only the desktop kit, without
-  the WASM kit, emsdk or Python: enough for the server, the native client and
-  the tests, as in the CI (§10.4).
 - The Qt WASM kit requires the desktop kit of the **same version** as host
   (`QT_HOST_PATH`) and a specific Emscripten release
-  (`QT_EMCC_RECOMMENDED_VERSION` in `QtPublicWasmToolchainHelpers.cmake`):
-  upgrade Qt and emsdk together.
+  (`QT_EMCC_RECOMMENDED_VERSION`), which toolchain-cpp's `qt-wasm` checks.
 - protobuf and abseil are built with the project's C++ standard, so that
-  abseil and the project agree on the `std` types abseil aliases. Its `protoc`
-  generates the contract's code of both builds, native and WebAssembly.
-- The same protobuf and abseil are built again for WebAssembly
-  (`~/software/protobuf-36.2-wasm`) with the emsdk of `scripts/setup-qt.sh`,
-  which must therefore run first; without emsdk, `scripts/build-deps.sh` skips
-  that part with a warning. They use what Qt's `wasm_singlethread` kit uses: no
-  threads and Emscripten's default exception handling. Both builds must have
-  the same version, which the generated code checks. The `wasm` preset finds
-  that installation through `CMAKE_PREFIX_PATH` and `CMAKE_FIND_ROOT_PATH`
+  abseil and the project agree on the `std` types abseil aliases. The native
+  `protoc` generates the contract's code of both builds, native and
+  WebAssembly. The WebAssembly protobuf uses what Qt's `wasm_singlethread` kit
+  uses (no threads, Emscripten's default exception handling), and both builds
+  must have the same version, which the generated code checks. The `wasm`
+  preset finds it through `CMAKE_PREFIX_PATH` and `CMAKE_FIND_ROOT_PATH`
   (Emscripten's toolchain only searches its sysroot) and generates the code
   with the native `protoc` (`GUITA_HOST_PROTOBUF_DIR`).
 - Emscripten needs Python ≥ 3.10 (`EMSDK_PYTHON`, set by the `wasm` preset and
   `scripts/build-wasm.sh`; `emsdk_env.sh` clears it).
-- **The static dependencies** of the self-contained desktop client (§9.2) are
-  built on demand by `scripts/build-static-deps.sh`, never by the CI or the
-  other scripts. It keeps their sources in `~/software/src` and checks every
-  download against the SHA-256 its server publishes (`<file>.sha256` on
-  download.qt.io and ftp.postgresql.org; Qt's tarballs are not signed). Both
-  are built with GCC 16, and Qt's build tools get the same run path as `protoc`.
-  - **Qt 6.12.0, static**, in `~/software/Qt/6.12.0-static`: one kit shared
-    with gambasse, the maintainer's other Qt project, whose
-    `scripts/build-static-deps.sh` carries the same Qt block (between markers,
-    checked with `diff`). It has the union of what both use: the five modules
-    the client needs plus qtsvg and, in qtbase, Qt SQL with the SQLite driver
-    on Qt's own copy of SQLite (every other driver off), which the client does
-    not link. The six modules are compiled in order against that prefix
-    (`qt-configure-module`), qtsvg before qtdeclarative, an optional
-    dependency of it. A kit that lacks a module of the list is removed and
-    built again whole, after every download is checked: modules built against
-    another configuration of qtbase must not be mixed. Every feature that
-    would otherwise depend on the `-devel` packages installed is fixed, so the
-    result does not change with them. Only X11 (xcb, with its GLX and EGL
-    integrations), without Wayland or the embedded backends. Qt's own copies of
-    PCRE2, HarfBuzz, libpng, libjpeg, double-conversion, libb2 and md4c, which
-    not every desktop has, and the
-    system's zlib, freetype, fontconfig, OpenGL and X11 libraries. OpenSSL and
-    D-Bus are loaded at run time (`-openssl-runtime`,
-    `-no-feature-dbus-linked`: `-dbus-runtime` does not reach CMake in 6.12.0).
-    No ICU (Qt has its own CLDR data), GLib, Widgets, printing, session
-    management, GSSAPI, Brotli or zstd; qttools builds only its Linguist tools.
-    Qt keeps its default C++ standard: unlike abseil's, Qt's ABI does not depend
-    on the standard of the application. Building it with X11 needs the
-    development packages of xcb-util (`xcb-util`, `-wm`, `-image`, `-keysyms`,
-    `-renderutil`, `-cursor`) and of `libxkbcommon-x11`, besides those of
-    OpenSSL, libxcb, libxkbcommon, fontconfig, freetype, Mesa (GL and EGL), X11
-    and zlib. It takes about half an hour with 12 cores (27 minutes on the
-    development machine), and several GB for the build trees, removed at the
-    end; the installed Qt takes 1.2 GB, and its tarballs and sources 0.8 GB.
-  - **libpq of PostgreSQL 18.6, static**, in `~/software/libpq-18.6-static`:
-    PostgreSQL's client-only installation with `configure` (headers, libpq,
-    the common and port libraries libpq needs, and `pg_config`), with
-    `--with-ssl=openssl --without-icu --without-readline --without-zlib`.
-    GSSAPI and LDAP are off by default. The shared libpq is removed, so
-    `FindPostgreSQL` can only find `libpq.a`. 18.6 is the release of the test
-    server, and speaks the same protocol to PostgreSQL 17.
-- **The cross compiler for Windows**, the base of a self-contained Windows
-  client built on Linux, is built on demand by `scripts/build-gcc-mingw.sh`,
-  never by the CI or the other scripts, in `~/software/gcc-16.2.0-mingw`: GCC
-  16.2.0 for C and C++, the native compiler's release, built with it from the
-  same tarball, with binutils 2.47 and mingw-w64 14.0.0 (the Windows and C
-  runtime headers, the C runtime and winpthreads). No prebuilt toolchain fits:
-  the MinGW-w64 ones with GCC run on Windows, llvm-mingw is Clang, and EL9's
-  (`mingw64-gcc` in CodeReady Builder) is GCC 14. Every download is checked
-  against its signature before anything is built or removed: GCC and binutils
-  with the GNU keyring, mingw-w64 with the key of its release manager, fetched
-  once from keyserver.ubuntu.com and required by its fingerprint, which the
-  script fixes.
-  - **The target**: Windows 10 or later, the minimum of Qt 6.12, with the
-    Universal C Runtime (`--with-default-msvcrt=ucrt`,
-    `--with-default-win32-winnt=0x0A00`); SEH exceptions; POSIX threads on
-    winpthreads (`--enable-threads=posix`), as in Qt's MinGW, MSYS2 and
-    Fedora; GCC 16's native Windows TLS for `thread_local` (`--enable-tls`,
-    which needs binutils 2.44 or later) instead of the emulated one; and
-    libstdc++'s `steady_clock` and sleeps on the `clock_gettime` and
-    `nanosleep` of winpthreads (`--enable-libstdcxx-time=yes`: by default,
-    on mingw, `steady_clock` is the wall clock).
-  - **Static runtime only** (`--disable-shared`, and winpthreads static): what
-    the compiler builds carries libgcc, libstdc++ and winpthreads inside,
-    without `-static`, and needs only system DLLs, `KERNEL32.dll` and the
-    UCRT's. The price is that no two DLLs can share one runtime, so it cannot
-    build a shared Qt for Windows; that would take the compiler again with
-    `--enable-shared`.
-  - **The prefix is also the sysroot** (`--with-sysroot`): mingw-w64 goes to
-    `x86_64-w64-mingw32/{include,lib}`, next to libstdc++, and a relative link
-    `mingw` points to it, because GCC looks for the system headers and
-    libraries in `<sysroot>/mingw/include` and `<sysroot>/mingw/lib`. With the
-    sysroot inside the prefix, GCC and ld find it relative to themselves, so
-    the directory can be moved.
-  - **The build** has no bootstrap, as no cross compiler does, and runs in a
-    work directory of its own in `~/software/src`, removed at the end (the
-    tarballs and keyrings stay): binutils; the mingw-w64 headers; GCC alone
-    (`make all-gcc`); with it, the C runtime and winpthreads, static because
-    libgcc does not exist yet; and the rest of GCC. Meanwhile its `bin` goes
-    first in the PATH, since the configure scripts of mingw-w64 find the cross
-    tools by name and EL9's are in `/usr/bin`. The compiler's programs
-    (`cc1plus`, `lto1`, ...) link libstdc++ statically, so they need no run
-    path. `x86_64-w64-mingw32/lib/libstdc++.a`, installed last, marks a
-    complete installation: without it, the script removes the prefix and
-    builds again from the start. It takes about a quarter of an hour with 12
-    cores (13 minutes on the development machine) and 9 GB of disk at its
-    peak; the compiler takes 0.5 GB, and the three tarballs 150 MB.
-  - **The check**, at the end of the installation and on demand with
-    `scripts/build-gcc-mingw.sh --check`, builds with no extra flags a C++26
-    test program the script carries: four `std::jthread`s that count in a
-    `thread_local` variable and catch an exception, a `shared_ptr` copied into
-    each, and pack indexing. It fails, naming them, if the program imports any
-    DLL other than `KERNEL32.dll`, `ucrtbase.dll` and the UCRT's
-    `api-ms-win-crt-*.dll` (the cross `objdump -p`), or carries symbols of the
-    emulated TLS (`__emutls*`, with `nm`). With Wine in the PATH it then runs
-    the program and compares its output and exit status with the expected
-    ones: in a temporary Wine prefix, removed with its `wineserver` afterwards,
-    so `~/.wine` is never created or touched; without `DISPLAY` or
-    `WAYLAND_DISPLAY`, so no window opens; with Mono and Gecko disabled
-    (`WINEDLLOVERRIDES`); and within two minutes. It takes a few seconds with
-    Wine 10.6, most of them creating the prefix; without Wine it warns and
-    skips the run. `--check <executable>` applies the DLL and TLS checks to
-    any executable (the TLS one needs its symbols). There is no CTest suite:
-    the tests must not need the cross compiler.
-  - **`std::print` needs `-lstdc++exp`** on Windows: it writes to the console
-    through `std::__open_terminal` and `std::__write_to_terminal`, which GCC
-    16 still keeps in `libstdc++exp.a`. The test program prints with
-    `std::format` instead.
+- **The static Qt and libpq** of the self-contained client (§9.2) are
+  installed on demand (`qt-static libpq-static`), never by the CI. The static
+  Qt is one kit for every project, with the union of what they use (qtbase
+  with Qt SQL and SQLite, qtshadertools, qtsvg, qtdeclarative, qtwebsockets and
+  the Linguist tools), X11 only, with every feature that would depend on the
+  installed `-devel` packages fixed; OpenSSL and D-Bus are loaded at run time.
+  The static libpq is PostgreSQL's client part, with OpenSSL; 18.6 is the
+  release of the test server, and speaks the same protocol to PostgreSQL 17. A
+  Qt module the client needs is added to the `qt-static` component, in a change
+  of toolchain-cpp.
+- **The cross compiler for Windows** (`gcc-mingw`) is the base of the
+  self-contained Windows client (#29): GCC 16.2.0 for `x86_64-w64-mingw32`,
+  whose executables carry the C++ runtime inside and need only DLLs of
+  Windows 10 or later. On Windows, `std::print` needs `-lstdc++exp`
+  (toolchain-cpp's `docs/toolchain.md`).
 - Presets: `native` (Debug, `build/native`) and `wasm` (Release, `build/wasm`).
   `scripts/build-wasm.sh` also copies the web files to `build/web`, the docroot
   used by `scripts/run-server.sh`. The `static` preset (Release,
@@ -902,7 +816,7 @@ header-only, and libpq comes from the system or the package.
 **The self-contained client.** `scripts/build-static.sh` builds on demand,
 with the `static` preset (§8), a single executable, `build/dist/client` (43 MB
 without symbols), that can be copied to another Linux machine and run there
-without installing Qt or anything from `~/software`, as the web client carries
+without installing Qt or anything from toolchain-cpp, as the web client carries
 Qt inside `client.wasm`. It takes the same options and variables as the native
 client. Neither the native build, the tests nor the CI need it.
 
@@ -932,7 +846,8 @@ client. Neither the native build, the tests nor the CI need it.
 - **How it is checked:** `scripts/build-static.sh` fails, naming them, if
   `readelf -d` shows a `RUNPATH` or `RPATH`, or a `NEEDED` library of Qt, ICU,
   `libstdc++`, `libgcc_s`, libpq, protobuf or abseil, or if `ldd` resolves a
-  library inside `~/software` or the repository, or does not find one.
+  library inside toolchain-cpp's installation directory (`SOFTWARE_DIR`) or the
+  repository, or does not find one.
   `scripts/build-static.sh --check <executable>` runs only that check. Since the tests run without the
   static kit, the rest is checked by hand when the static build changes: the
   executable, copied to another directory and started with `env -i`, lists and
@@ -1028,32 +943,38 @@ application's default connection string.
 (`workflow_dispatch`, to try a change branch before its pull request). A
 single job, `Build and test`, on `ubuntu-24.04` but inside the official
 `gcc:16.2.0-trixie` image (Debian trixie with GCC 16.2.0 built from the GNU
-sources, the same release and configure options as `scripts/build-gcc.sh`
-installs locally, §8):
+sources, the same release and configure options as toolchain-cpp's `gcc`
+component builds locally, §8):
 
-1. checks out the whole history, which `scripts/check-contract.sh` needs, and
-   marks it as safe for git: it belongs to the runner's user, not to the
-   container's root, and `actions/checkout` only trusts it during its own step;
+1. checks out guita in `guita/`, with the whole history, which
+   `scripts/check-contract.sh` needs, and toolchain-cpp next to it in
+   `toolchain-cpp/`, at the version guita pins (`TOOLCHAIN_CPP_REF`), so that
+   the presets find it as they do locally; the steps run in `guita/`. guita's
+   checkout is marked as safe for git: it belongs to the runner's user, not to
+   the container's root, and `actions/checkout` only trusts it during its own
+   step;
 2. runs `scripts/check-version.sh` against the branch pushed to or the base
    branch of the pull request (manual runs have no branch to compare with);
-3. checks that the image's GCC is the `GCC_VERSION` of `scripts/build-gcc.sh`,
-   and fails otherwise, so that the local compiler and the CI's cannot drift
-   apart;
+3. checks that the image's GCC is the `GCC_VERSION` of toolchain-cpp's
+   `versions.sh`, and fails otherwise, so that the local compiler and the CI's
+   cannot drift apart;
 4. installs with `apt` (as root, without `sudo`) what the project takes from
    the system and the image lacks: CMake, Ninja, the Python `venv` module for
    aqtinstall, libpq, zlib and the libraries Qt needs to build and run
    headless;
-5. links `~/software/gcc-16.2.0` to the image's `/usr/local`, where the
-   presets and `scripts/build-deps.sh` look for the compiler; the link stays
-   out of the cache;
-6. restores `~/software` from the cache or, when the key changed, installs it
-   with `scripts/setup-qt.sh --desktop-only` and `scripts/build-deps.sh`,
-   drops the sources, and saves it at once, so that a run whose tests fail
-   keeps it. The key is the hash of both scripts plus the image
-   (`toolchain-gcc-16.2.0-trixie-<hash>`), whose system and compiler the
-   libraries are built with: changing a version in them reinstalls
-   everything, and a cold run (mostly protobuf with abseil) is covered by the
-   job's timeout;
+5. links `toolchain-cpp/software/gcc-16.2.0` to the image's `/usr/local`:
+   toolchain-cpp's `gcc` component takes a link to a GCC of its version as
+   installed, so the job never builds GCC, and the link stays out of the
+   cache;
+6. restores `toolchain-cpp/software` from the cache or, when the key changed,
+   installs the native build's components with `toolchain-cpp/install.sh`
+   (`TOOLCHAIN_CPP_COMPONENTS`: `qt libpqxx cpp-httplib protobuf buf`), drops
+   the sources and aqt's environment, and saves it at once, so that a run whose
+   tests fail keeps it. The key is the pinned version, the image (whose system
+   and compiler the libraries are built with) and the components
+   (`toolchain-cpp-v0.1.0-gcc-16.2.0-trixie-<components>`): pinning another
+   version reinstalls everything, and a cold run (mostly protobuf with abseil)
+   is covered by the job's timeout;
 7. runs `cmake --preset native`, `cmake --build --preset native` and
    `ctest --preset native --parallel`;
 8. runs `scripts/check-contract.sh` against `origin/develop/vX.Y.Z`, also
@@ -1068,8 +989,8 @@ suites are the same locally and in CI, and only the provider of the server
 changes. Docker Hub does not rate-limit the pulls of public images from
 GitHub's runners. A new run of the same branch or pull request cancels the one
 in progress, and the workflow only reads the repository (`contents: read`).
-The WebAssembly build (#12; its job needs this image too, since
-`scripts/build-deps.sh` builds the host `protoc` with GCC 16) and the
+The WebAssembly build (#12; its job needs this image too, since the host
+`protoc` is built with GCC 16) and the
 measurements of `tests/bench` are not part of the CI.
 
 **Requiring it.** A repository ruleset, `develop and release`, on
@@ -1113,7 +1034,8 @@ created after the first run, and the job keeps its name.
     relink it with a modified Qt, which the project's public sources and the
     scripts that build it cover; a distributed copy still ships the LGPL text
     and Qt's notices (the static Qt installs its SBOM in
-    `~/software/Qt/6.12.0-static/sbom`) and offers Qt's source code.
+    `Qt/6.12.0-static/sbom` under toolchain-cpp's `software/`) and offers Qt's
+    source code.
   - **Web**: `client.wasm` links Qt statically, and serving it to browsers is
     distribution. The LGPL then requires letting users relink the client with
     a modified Qt (for example by publishing the client's sources or object

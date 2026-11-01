@@ -10,15 +10,17 @@
 # The default ref is the development branch of the version in CMakeLists.txt,
 # origin/develop/vX.Y.Z when the remote branch exists, develop/vX.Y.Z otherwise.
 # When that ref has no contract yet, there is nothing to break.
-# buf: $BUF, the buf on PATH, or the one installed by scripts/build-deps.sh.
+# buf: $BUF, the buf on PATH, or the buf component of toolchain-cpp, cloned next to
+# guita ($SOFTWARE_DIR, by default ../toolchain-cpp/software).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
+SOFTWARE_DIR="${SOFTWARE_DIR:-$(cd "$ROOT/.." && pwd)/toolchain-cpp/software}"
 
-buf="${BUF:-$(command -v buf || ls -d "${SOFTWARE_DIR:-$HOME/software}"/buf-*/bin/buf 2>/dev/null | sort -V | tail -1)}"
+buf="${BUF:-$(command -v buf || ls -d "$SOFTWARE_DIR"/buf-*/bin/buf 2>/dev/null | sort -V | tail -1)}"
 if [[ -z "$buf" || ! -x "$buf" ]]; then
-    echo "error: buf not found; install it with scripts/build-deps.sh or set BUF" >&2
+    echo "error: buf not found; install it with toolchain-cpp (install.sh buf) or set BUF" >&2
     exit 1
 fi
 
