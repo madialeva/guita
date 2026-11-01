@@ -16,5 +16,5 @@
 
 ## 2. Verificación
 
-- [ ] 2.1 El usuario hace push de la rama y lanza el CI a mano (`workflow_dispatch`), antes del PR, y el CI pasa: es la primera ejecución en limpio, con la caché nueva.
-- [ ] 2.2 El usuario revisa el cambio y da el visto bueno.
+- [x] 2.1 El usuario hace push de la rama y lanza el CI a mano (`workflow_dispatch`), antes del PR, y el CI pasa: es la primera ejecución en limpio, con la caché nueva.
+- [x] 2.2 El usuario revisa el cambio y da el visto bueno.
