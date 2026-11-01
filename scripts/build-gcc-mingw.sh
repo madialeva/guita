@@ -27,6 +27,16 @@
 # done when the compiler is already installed; an install that did not finish is
 # removed and built again from the start.
 #
+# The install ends checking the compiler: it builds a C++26 test program with threads,
+# thread_local, exceptions and shared_ptr, fails if the program imports any DLL that is
+# not of the system or uses the emulated TLS, and runs it with Wine if there is one,
+# in a Wine prefix of its own (~/.wine is not touched) and without a display.
+#
+#   scripts/build-gcc-mingw.sh                       build and install, then check
+#   scripts/build-gcc-mingw.sh --check               only check the installed compiler
+#   scripts/build-gcc-mingw.sh --check <executable>  only check the DLLs and the TLS of
+#                                                    <executable>
+#
 # On demand only: the native build, the tests and the CI do not need it.
 #
 # System requirements: those of scripts/build-gcc.sh (make, m4, bzip2, xz, wget,
@@ -49,9 +59,159 @@ PREFIX="$SOFTWARE_DIR/gcc-$GCC_VERSION-mingw"
 SRC="$SOFTWARE_DIR/src"
 # The key that signs the mingw-w64 releases (Jonathan Yong)
 MINGW_KEY=CAF5641F74F7DFBA88AE205693BDB53CD4EBC740
-
 # libstdc++.a is installed last: the compiler driver alone is there halfway
-if [[ -f "$PREFIX/$TARGET/lib/libstdc++.a" ]]; then
+INSTALLED="$PREFIX/$TARGET/lib/libstdc++.a"
+
+usage() {
+    echo "usage: $0 [--check [<executable>]]" >&2
+    exit 2
+}
+
+require_compiler() {
+    if [[ ! -f "$INSTALLED" ]]; then
+        echo "error: no cross compiler in $PREFIX: run scripts/build-gcc-mingw.sh first" >&2
+        exit 1
+    fi
+}
+
+# check_executable <executable>: fails, naming them, if <executable> imports a DLL that
+# is not of the system, the Windows kernel's or the UCRT's (objdump -p), or carries
+# symbols of the emulated TLS (nm: an executable without symbols shows none)
+check_executable() {
+    local exe="$1" problems=() dlls dll symbol
+    dlls="$(LC_ALL=C "$PREFIX/bin/$TARGET-objdump" -p "$exe" | sed -n 's/^[[:space:]]*DLL Name: //p')"
+    while read -r dll; do
+        case "${dll,,}" in
+            "" | kernel32.dll | ucrtbase.dll | api-ms-win-crt-*.dll) ;;
+            *) problems+=("imports $dll") ;;
+        esac
+    done <<<"$dlls"
+    while read -r symbol; do
+        problems+=("uses the emulated TLS: $symbol")
+    done < <(LC_ALL=C "$PREFIX/bin/$TARGET-nm" "$exe" 2>/dev/null | awk '$NF ~ /^__emutls/ {print $NF}')
+
+    if ((${#problems[@]})); then
+        echo "error: $exe does not pass the check:" >&2
+        printf '  %s\n' "${problems[@]}" >&2
+        return 1
+    fi
+    echo ">> $exe imports only these DLLs of the system:"
+    sed 's/^/     /' <<<"$dlls"
+}
+
+# The test program and what it prints: threads that count in a thread_local variable
+# and catch an exception, a shared_ptr copied into each, and a C++26 feature
+EXPECTED="threads=4 thread_local=4000 exceptions=4 shared_ptr=1 c++26=26"
+write_test_program() {
+    cat <<'EOF'
+#include <atomic>
+#include <cstdio>
+#include <format>
+#include <memory>
+#include <stdexcept>
+#include <thread>
+#include <vector>
+
+namespace {
+
+thread_local int counter = 0;
+
+// Pack indexing, new in C++26
+template <typename... Ts>
+constexpr auto first(Ts... values) {
+    return values...[0];
+}
+
+}  // namespace
+
+int main() {
+    constexpr int threads = 4, rounds = 1000;
+    std::atomic<int> total = 0, caught = 0;
+    auto shared = std::make_shared<int>(26);
+    {
+        std::vector<std::jthread> workers;
+        for (int i = 0; i < threads; ++i) {
+            workers.emplace_back([&total, &caught, shared] {
+                for (int round = 0; round < rounds; ++round) {
+                    ++counter;
+                }
+                total += counter;
+                try {
+                    throw std::runtime_error("thrown in a thread");
+                } catch (const std::runtime_error &) {
+                    ++caught;
+                }
+            });
+        }
+    }
+    // Not std::println: on Windows it needs libstdc++exp.a (-lstdc++exp)
+    std::fputs(std::format("threads={} thread_local={} exceptions={} shared_ptr={} c++26={}\n",
+                           threads, total.load(), caught.load(), shared.use_count(),
+                           first(*shared, 0))
+                   .c_str(),
+               stdout);
+    return total == threads * rounds && caught == threads && shared.use_count() == 1 ? 0 : 1;
+}
+EOF
+}
+
+# The check's directory: the test program, and the Wine prefix and its log
+check_dir=""
+cleanup_check() {
+    if [[ -d "$check_dir/wine" ]]; then
+        WINEPREFIX="$check_dir/wine" wineserver -k 2>/dev/null || true
+        WINEPREFIX="$check_dir/wine" wineserver -w 2>/dev/null || true
+    fi
+    rm -rf "$check_dir"
+}
+
+# check_compiler: builds the test program with no extra flags, checks it, and runs it
+# with Wine if it is in the PATH
+check_compiler() {
+    local output status=0
+    check_dir="$(mktemp -d)"
+    trap cleanup_check EXIT
+    cd "$check_dir"
+    write_test_program >test.cpp
+    "$PREFIX/bin/$TARGET-g++" -std=c++26 -O2 -o test.exe test.cpp
+    check_executable test.exe
+
+    if ! command -v wine >/dev/null; then
+        echo ">> warning: no wine in the PATH: test.exe was not run" >&2
+        return
+    fi
+    # A prefix of its own, no display so that no window opens, no offer to install
+    # Mono or Gecko, and a time limit should the program hang
+    output="$(env -u DISPLAY -u WAYLAND_DISPLAY -u WINEARCH WINEPREFIX="$check_dir/wine" \
+        WINEDEBUG=-all WINEDLLOVERRIDES="mscoree,mshtml=" timeout 120 wine test.exe \
+        2>wine.log)" || status=$?
+    output="${output//$'\r'/}"
+    if ((status != 0)) || [[ "$output" != "$EXPECTED" ]]; then
+        echo "error: test.exe failed under $(wine --version) (exit status $status), printing:" >&2
+        sed 's/^/  /' <<<"$output" >&2
+        echo "instead of:" >&2
+        echo "  $EXPECTED" >&2
+        tail -n 20 wine.log >&2
+        exit 1
+    fi
+    echo ">> test.exe under $(wine --version): $output"
+    echo ">> the cross compiler in $PREFIX works"
+}
+
+case "${1:-}" in
+    "") [[ $# -eq 0 ]] || usage ;;
+    --check)
+        require_compiler
+        case $# in
+            1) check_compiler ;;
+            2) check_executable "$2" ;;
+            *) usage ;;
+        esac
+        exit ;;
+    *) usage ;;
+esac
+
+if [[ -f "$INSTALLED" ]]; then
     echo ">> gcc-$GCC_VERSION-mingw already installed in $PREFIX"
     exit 0
 fi
@@ -211,3 +371,4 @@ mkdir build-winpthreads
 cd "$SRC"
 rm -rf "$work"
 echo ">> gcc-$GCC_VERSION-mingw installed in $PREFIX"
+check_compiler

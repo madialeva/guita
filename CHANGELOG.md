@@ -81,4 +81,6 @@ First version: a proof of concept of the architecture, to be released as 0.1.0.
   demand and without root privileges by `scripts/build-gcc-mingw.sh` from the
   signed sources of GCC, binutils and mingw-w64: the first step towards a
   self-contained Windows client built on Linux. What it builds carries the C++
-  runtime inside and needs only DLLs of Windows 10 or later.
+  runtime inside and needs only DLLs of Windows 10 or later, which
+  `scripts/build-gcc-mingw.sh --check` verifies on a test program, running it
+  under Wine when Wine is installed.

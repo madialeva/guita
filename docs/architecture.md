@@ -814,6 +814,27 @@ mode self-contained, without external services.
     builds again from the start. It takes about a quarter of an hour with 12
     cores (13 minutes on the development machine) and 9 GB of disk at its
     peak; the compiler takes 0.5 GB, and the three tarballs 150 MB.
+  - **The check**, at the end of the installation and on demand with
+    `scripts/build-gcc-mingw.sh --check`, builds with no extra flags a C++26
+    test program the script carries: four `std::jthread`s that count in a
+    `thread_local` variable and catch an exception, a `shared_ptr` copied into
+    each, and pack indexing. It fails, naming them, if the program imports any
+    DLL other than `KERNEL32.dll`, `ucrtbase.dll` and the UCRT's
+    `api-ms-win-crt-*.dll` (the cross `objdump -p`), or carries symbols of the
+    emulated TLS (`__emutls*`, with `nm`). With Wine in the PATH it then runs
+    the program and compares its output and exit status with the expected
+    ones: in a temporary Wine prefix, removed with its `wineserver` afterwards,
+    so `~/.wine` is never created or touched; without `DISPLAY` or
+    `WAYLAND_DISPLAY`, so no window opens; with Mono and Gecko disabled
+    (`WINEDLLOVERRIDES`); and within two minutes. It takes a few seconds with
+    Wine 10.6, most of them creating the prefix; without Wine it warns and
+    skips the run. `--check <executable>` applies the DLL and TLS checks to
+    any executable (the TLS one needs its symbols). There is no CTest suite:
+    the tests must not need the cross compiler.
+  - **`std::print` needs `-lstdc++exp`** on Windows: it writes to the console
+    through `std::__open_terminal` and `std::__write_to_terminal`, which GCC
+    16 still keeps in `libstdc++exp.a`. The test program prints with
+    `std::format` instead.
 - Presets: `native` (Debug, `build/native`) and `wasm` (Release, `build/wasm`).
   `scripts/build-wasm.sh` also copies the web files to `build/web`, the docroot
   used by `scripts/run-server.sh`. The `static` preset (Release,

@@ -168,7 +168,9 @@ La comprobación completa:
    - cuatro `std::jthread` que incrementan una variable `thread_local` y suman el resultado en un `std::atomic`;
    - un `std::shared_ptr` copiado en cada hilo;
    - una excepción lanzada y capturada dentro de un hilo;
-   - una característica de C++26 (indexación de packs) y `std::println` para la salida.
+   - una característica de C++26 (indexación de packs), y `std::format` para la salida.
+
+   Al implementar se cambió `std::println` por `std::format` con `std::fputs`. En mingw, `std::print` escribe en la consola con `std::__open_terminal` y `std::__write_to_terminal`, que GCC 16 todavía deja en `libstdc++exp.a`: un programa que lo use tiene que enlazar con `-lstdc++exp`, y la prueba se compila sin opciones. Se documenta en `docs/architecture.md` para el siguiente issue.
 2. **Comprueba sus DLLs** con el `objdump -p` de las binutils cruzadas, y falla nombrando cada una que no sea `KERNEL32.dll`, `ucrtbase.dll` o una `api-ms-win-crt-*.dll`.
 3. **Comprueba el TLS:** falla si `nm` muestra algún símbolo `__emutls` (decisión 5).
 4. **Lo ejecuta con Wine**, si `wine` está en el PATH:

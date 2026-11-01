@@ -210,7 +210,8 @@ cross compiler for 64-bit Windows, built once from source, on demand, in about a
 quarter of an hour:
 
 ```sh
-scripts/build-gcc-mingw.sh   # GCC 16.2 for x86_64-w64-mingw32 under ~/software, once
+scripts/build-gcc-mingw.sh          # GCC 16.2 for x86_64-w64-mingw32 under ~/software, once
+scripts/build-gcc-mingw.sh --check  # build a test program and run it under Wine
 ```
 
 ## Running

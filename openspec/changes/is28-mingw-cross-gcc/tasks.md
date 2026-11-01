@@ -33,14 +33,14 @@
 
 ## 2. La comprobación del compilador
 
-- [ ] 2.1 Añadir la comprobación según la decisión 10: el programa de prueba, sus DLLs, el TLS y la ejecución con Wine, los modos `--check` y `--check <ejecutable>`, y la comprobación al final de la instalación. Verificar:
+- [x] 2.1 Añadir la comprobación según la decisión 10: el programa de prueba, sus DLLs, el TLS y la ejecución con Wine, los modos `--check` y `--check <ejecutable>`, y la comprobación al final de la instalación. Verificar:
   - que `scripts/build-gcc-mingw.sh --check` termina sin errores, lista `KERNEL32.dll` y las DLLs del UCRT y muestra la salida esperada del programa ejecutado con Wine;
   - que `~/.wine` sigue sin existir, y que no quedan ni el prefijo temporal de Wine ni su `wineserver`.
-- [ ] 2.2 Comprobar los casos de error y de entorno:
+- [x] 2.2 Comprobar los casos de error y de entorno:
   - un ejecutable enlazado en `tmp/` contra una DLL de prueba llamada `libstdc++-6.dll` hace fallar `--check <ejecutable>`, que nombra esa DLL;
-  - el programa de prueba compilado con `-femulated-tls` hace fallar `--check <ejecutable>`, que nombra los símbolos `__emutls`;
+  - un ejecutable con TLS emulado hace fallar `--check <ejecutable>`, que nombra los símbolos `__emutls`. GCC no tiene `-femulated-tls`, que es de Clang: el modelo de TLS se fija al configurarlo. Así que el ejecutable se enlaza con este compilador a partir de un objeto con una variable `__thread` compilado por el mingw 14 del sistema, que usa TLS emulado, y solo importa DLLs del sistema;
   - con un PATH sin Wine, `--check` avisa de que no ejecuta el programa y termina sin error;
   - lanzada con `DISPLAY=:99`, el Xvfb de las comprobaciones gráficas, `xwininfo -root -children` no muestra ninguna ventana nueva;
   - una copia del prefijo en `tmp/` pasa `--check` igual que el original, porque el directorio se puede mover. Después se borra la copia.
-- [ ] 2.3 Documentar la comprobación en `docs/architecture.md` §8: qué compila, qué DLLs admite, el TLS, Wine y los modos `--check`. Verificar que coincide con el script y que `ctest --preset native` pasa completo.
+- [x] 2.3 Documentar la comprobación en `docs/architecture.md` §8: qué compila, qué DLLs admite, el TLS, Wine y los modos `--check`. Verificar que coincide con el script y que `ctest --preset native` pasa completo.
 - [ ] 2.4 El usuario revisa el compilador y la comprobación y da el visto bueno. Opcional: ejecutar el programa de prueba, compilado en `tmp/` con el compilador instalado, en un Windows 10 u 11 de 64 bits.
