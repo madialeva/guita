@@ -1,25 +1,31 @@
 #!/usr/bin/env bash
 # Builds and installs in the user's directory (no sudo) the static dependencies of
 # the self-contained desktop client (scripts/build-static.sh, docs/architecture.md §9.2):
-#   - Qt $QT_VERSION, static, with only the modules the client uses: qtbase,
-#     qtshadertools, qtdeclarative, qtwebsockets and the Linguist tools of qttools,
-#     in $SOFTWARE_DIR/Qt/$QT_VERSION-static
+#   - Qt $QT_VERSION, static, in $SOFTWARE_DIR/Qt/$QT_VERSION-static
 #   - libpq of PostgreSQL $POSTGRESQL_VERSION, static, the client part only, in
 #     $SOFTWARE_DIR/libpq-$POSTGRESQL_VERSION-static
+#
+# The Qt kit is shared with the maintainer's other Qt project (gambasse), whose
+# scripts/build-static-deps.sh builds it with the same Qt block below: the union of
+# what both use. qtbase with Qt SQL and Qt's own SQLite, qtshadertools, qtsvg,
+# qtdeclarative, qtwebsockets and the Linguist tools of qttools. Whichever script runs
+# first builds it, and the other finds it complete. A kit that lacks a module of the
+# list (one built by an older script) is removed and built again whole: modules built
+# against another configuration of qtbase must not be mixed.
 #
 # Only the on-demand static build needs them: the native preset, the tests and the
 # CI do not. They are built with the GCC that scripts/build-gcc.sh installs (run it
 # first); the Qt tools that run during a build (moc, qmlcachegen, lrelease, ...) get
 # a run path to its libstdc++, as protoc does. The sources stay in $SOFTWARE_DIR/src
 # for later rebuilds, every download is checked against the SHA-256 published by
-# its server before anything is built, and nothing is downloaded nor built again
-# for what is already installed.
+# its server before anything is built or removed, and nothing is downloaded nor
+# built again for what is already installed.
 #
 # Every Qt feature that would otherwise depend on the -devel packages installed is
 # fixed here, so that the result does not change with them: X11 (xcb) only, Qt's own
-# copies of the libraries that not every desktop has, and the system's of those that
-# every desktop has (zlib, freetype with fontconfig, OpenGL, X11). OpenSSL and D-Bus
-# are loaded at run time.
+# copies of the libraries that not every desktop has (SQLite among them), and the
+# system's of those that every desktop has (zlib, freetype with fontconfig, OpenGL,
+# X11). OpenSSL and D-Bus are loaded at run time.
 #
 # System requirements: cmake 3.25+, ninja, curl, xz, and the development packages of
 # OpenSSL, libxcb and xcb-util (-wm, -image, -keysyms, -renderutil, -cursor),
@@ -68,12 +74,21 @@ download() {
     fi
 }
 
-# ---- Qt ---------------------------------------------------------------------------
+# ---- Qt: the shared static kit ------------------------------------------------------
+# This block is the same in guita's and gambasse's scripts/build-static-deps.sh, up to
+# the end marker: change both together (AGENTS.md of each repository).
 
-# The modules, in build order, and the CMake package that marks each one as installed
-QT_MODULES=(qtbase qtshadertools qtdeclarative qtwebsockets qttools)
-declare -A QT_MARKER=([qtbase]=Qt6Core [qtshadertools]=Qt6ShaderTools [qtdeclarative]=Qt6Quick
-    [qtwebsockets]=Qt6WebSockets [qttools]=Qt6LinguistTools)
+# The modules, in build order (qtsvg before qtdeclarative, an optional dependency of
+# it), and the files that mark each one as installed in the kit
+QT_MODULES=(qtbase qtshadertools qtsvg qtdeclarative qtwebsockets qttools)
+declare -A QT_MARKERS=(
+    [qtbase]="lib/cmake/Qt6Core lib/cmake/Qt6Sql plugins/sqldrivers/libqsqlite.a"
+    [qtshadertools]="lib/cmake/Qt6ShaderTools"
+    [qtsvg]="lib/cmake/Qt6Svg"
+    [qtdeclarative]="lib/cmake/Qt6Quick"
+    [qtwebsockets]="lib/cmake/Qt6WebSockets"
+    [qttools]="lib/cmake/Qt6LinguistTools"
+)
 
 # qtbase: static, release, and every system-dependent feature fixed
 QTBASE_OPTIONS=(
@@ -93,10 +108,15 @@ QTBASE_OPTIONS=(
     # Loaded at run time: libssl for wss:// and libdbus-1 (accessibility, portals).
     # -dbus-runtime does not reach CMake in 6.12.0, hence the feature itself
     -openssl-runtime -no-feature-dbus-linked
-    # Not used by the client: ICU (Qt has its own CLDR data), GLib (Qt's own event
-    # loop), Widgets (and with it the GTK theme), SQL, printing (and with it CUPS),
+    # Qt SQL with the SQLite driver only, on Qt's own copy of SQLite (gambasse's
+    # database); every other driver off, or it would follow the -devel installed
+    -feature-sql -sql-sqlite -qt-sqlite
+    -no-sql-db2 -no-sql-ibase -no-sql-mimer -no-sql-mysql -no-sql-oci -no-sql-odbc
+    -no-sql-psql
+    # Used by neither project: ICU (Qt has its own CLDR data), GLib (Qt's own event
+    # loop), Widgets (and with it the GTK theme), printing (and with it CUPS),
     # session management, and the network extras that would link more libraries
-    -no-icu -no-glib -no-widgets -no-feature-sql -no-feature-printsupport
+    -no-icu -no-glib -no-widgets -no-feature-printsupport
     -no-feature-sessionmanager -no-feature-gssapi -no-feature-brotli
     -no-feature-zstd -no-libproxy -no-journald
 )
@@ -112,21 +132,29 @@ qt_src="$SRC/qt-$QT_VERSION"
 qt_url="https://download.qt.io/official_releases/qt/${QT_VERSION%.*}/$QT_VERSION/submodules"
 qt_missing=()
 for module in "${QT_MODULES[@]}"; do
-    [[ -d "$QT_PREFIX/lib/cmake/${QT_MARKER[$module]}" ]] || qt_missing+=("$module")
+    for marker in ${QT_MARKERS[$module]}; do
+        [[ -e "$QT_PREFIX/$marker" ]] || qt_missing+=("$marker")
+    done
 done
 
 if ((${#qt_missing[@]} == 0)); then
     echo ">> Qt $QT_VERSION (static) already installed in $QT_PREFIX"
 else
-    # Every source is checked before any module is built
+    if [[ -d "$QT_PREFIX" ]]; then
+        echo ">> the static Qt kit in $QT_PREFIX lacks: ${qt_missing[*]}"
+        echo ">> it is built again whole, with every module of the list"
+    fi
+
+    # Every source is checked before the kit is removed and any module is built
     mkdir -p "$qt_src"
-    for module in "${qt_missing[@]}"; do
+    for module in "${QT_MODULES[@]}"; do
         tarball="$module-everywhere-src-$QT_VERSION.tar.xz"
         download "$qt_url/$tarball" "$qt_src/$tarball"
         [[ -d "$qt_src/$module-everywhere-src-$QT_VERSION" ]] || tar -xf "$qt_src/$tarball" -C "$qt_src"
     done
 
-    for module in "${qt_missing[@]}"; do
+    rm -rf "$QT_PREFIX"
+    for module in "${QT_MODULES[@]}"; do
         src="$qt_src/$module-everywhere-src-$QT_VERSION"
         build="$qt_src/build-$module"
         rm -rf "$build"
@@ -145,6 +173,8 @@ else
         echo ">> $module $QT_VERSION installed in $QT_PREFIX"
     done
 fi
+
+# ---- end of the shared Qt block -----------------------------------------------------
 
 # ---- libpq ------------------------------------------------------------------------
 

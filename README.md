@@ -193,7 +193,8 @@ scripts/build-wasm.sh
 A self-contained desktop client, a single executable that can be copied to
 another Linux machine and run without installing Qt, is built on demand, as
 the web client carries Qt inside `client.wasm`. It needs a static Qt and libpq,
-built once from source in about half an hour. On Fedora and RHEL, building Qt
+built once from source in about half an hour; the static Qt is shared with
+gambasse, whose script builds the same kit. On Fedora and RHEL, building Qt
 also needs `xcb-util-devel`, `xcb-util-wm-devel`, `xcb-util-image-devel`,
 `xcb-util-keysyms-devel`, `xcb-util-renderutil-devel`, `xcb-util-cursor-devel`
 and `libxkbcommon-x11-devel`:
