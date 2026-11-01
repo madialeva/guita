@@ -383,12 +383,15 @@ Each OpenSpec change is tracked on GitHub with this cycle:
 
 1. OpenSpec proposal approved by the user.
 2. GitHub issue for the change, linking its `openspec/changes/<name>/`
-   folder (plus its milestone once milestones exist; the Projects board stays
-   light: Todo / In progress / Done). While active, the change folder is named
-   `is<n>-<slug>` after its issue; the date prefix is added only when the
-   change is archived.
+   folder (plus its milestone once milestones exist). While active, the change
+   folder is named `is<n>-<slug>` after its issue; the date prefix is added
+   only when the change is archived. The `Guita` Projects board, linked to the
+   repository, stays light (Todo / In Progress / Done): GitHub adds every new
+   issue to Todo, and moves it to Done when it is closed.
 3. Branch created from the issue (Development panel → "Create a branch";
-   name like `change/is<n>-<slug>`) starting from `develop/vX.Y.Z`.
+   name like `change/is<n>-<slug>`) starting from `develop/vX.Y.Z`. Creating
+   the branch also moves the issue to In Progress on the board
+   (`gh project item-edit`): no GitHub workflow does it.
 4. Implementation on the branch + push (pushes are done by the user; the
    agent has no SSH access to `origin` from its shell). Commits are partial,
    one per task group of `tasks.md`, so that no commit is huge and the branch
@@ -420,4 +423,5 @@ Each OpenSpec change is tracked on GitHub with this cycle:
 7. Merge commit as the norm (no squash): the per-group commits land on the
    development branch as they are, so its history keeps following the tasks
    of each change, and the merge commit marks where the change ends. Merged PR
-   = closed issue (automatic via `Closes`) = archived change.
+   = closed issue (automatic via `Closes`) = Done on the board = archived
+   change.
