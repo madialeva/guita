@@ -51,6 +51,7 @@ Proof of concept (v0.1.0). See [CHANGELOG.md](CHANGELOG.md) for what each versio
 | ✅ | Native desktop client connected to a remote backend |
 | ✅ | Standalone desktop mode with the backend embedded in the client |
 | ✅ | Self-contained desktop executable, with Qt linked in (built on demand) |
+| ⬜ | Self-contained Windows executable, cross-built on Linux |
 | ✅ | English and Spanish user interface |
 | ⬜ | Embedded PostgreSQL for standalone mode |
 | ⬜ | User authentication |
@@ -202,6 +203,15 @@ and `libxkbcommon-x11-devel`:
 ```sh
 scripts/build-static-deps.sh # static Qt 6.12 and libpq 18.6 under ~/software, once
 scripts/build-static.sh      # build/dist/client, checked to need only system libraries
+```
+
+Its Windows version will be cross-built on Linux. The first piece is a GCC 16.2
+cross compiler for 64-bit Windows, built once from source, on demand, in about a
+quarter of an hour:
+
+```sh
+scripts/build-gcc-mingw.sh          # GCC 16.2 for x86_64-w64-mingw32 under ~/software, once
+scripts/build-gcc-mingw.sh --check  # build a test program and run it under Wine
 ```
 
 ## Running

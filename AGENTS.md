@@ -222,7 +222,10 @@ context properties, `qmlRegister*` calls or objects injected from `main.cpp`:
   scripts. A new system dependency also goes to the workflow's `apt` list (of
   Debian trixie); it is described in `docs/architecture.md` §10.4. A new GCC
   version changes at once in `scripts/build-gcc.sh`, `scripts/build-deps.sh`,
-  the `native` preset and the image of the CI.
+  `scripts/build-static-deps.sh`, `scripts/build-gcc-mingw.sh` (the Windows
+  cross compiler, rebuilt with it), the presets that set the compiler
+  (`native` and `static`) and the CI workflow (its image, the link to it in
+  `~/software` and its cache keys).
 - `tests/web/dead-keys.mjs` checks by hand, outside `ctest`, that the web
   client composes accents typed with dead keys (`docs/architecture.md` §5.3);
   repeat it when Qt is upgraded.
@@ -320,6 +323,13 @@ include directory; project code never relies on it.
   `~/software/libpq-18.6-static`. The Qt kit is shared with gambasse: the Qt
   block of that script (modules and options, between its markers) is the same
   text in both repositories, and changes in both together.
+- Only to build for Windows (the base of a self-contained Windows client),
+  `scripts/build-gcc-mingw.sh` builds with that GCC, from signed sources kept
+  in `~/software/src`, a GCC 16.2.0 cross compiler for `x86_64-w64-mingw32` in
+  `~/software/gcc-16.2.0-mingw`, with binutils 2.47 and mingw-w64 14.0.0
+  (`docs/architecture.md` §8). Like the self-contained client, it is built
+  only on demand: neither `ctest --preset native`, the CI nor the end of a
+  change need it, unless the change touches that script.
 - System packages: a C++ compiler to build GCC (gcc-toolset-14 on EL9, whose
   binutils that GCC keeps using), CMake ≥ 3.25, zlib, `libpq5-devel`,
   PostgreSQL. The static Qt also needs the development packages of xcb-util
