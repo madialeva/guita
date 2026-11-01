@@ -659,6 +659,7 @@ mode self-contained, without external services.
 | PostgreSQL | 17 tested | system |
 | Qt, static (qtbase with Qt SQL and SQLite, qtshadertools, qtsvg, qtdeclarative, qtwebsockets and the Linguist tools of qttools), only for the self-contained client (§9.2), shared with gambasse | 6.12.0 | `scripts/build-static-deps.sh` (Qt's sources, GCC 16, X11 only) |
 | libpq, static, only for the self-contained client (§9.2) | 18.6 | `scripts/build-static-deps.sh` (PostgreSQL's sources, client part only) |
+| GCC cross compiler for 64-bit Windows (`x86_64-w64-mingw32`), C and C++, with binutils and mingw-w64, only for building for Windows | 16.2.0, binutils 2.47, mingw-w64 14.0.0 | `scripts/build-gcc-mingw.sh` (signed sources, built with the native GCC) |
 
 - Node.js 22 or later is needed only for the manual check of the web
   client's dead keys, `tests/web/dead-keys.mjs` (§5.3).
@@ -767,6 +768,52 @@ mode self-contained, without external services.
     GSSAPI and LDAP are off by default. The shared libpq is removed, so
     `FindPostgreSQL` can only find `libpq.a`. 18.6 is the release of the test
     server, and speaks the same protocol to PostgreSQL 17.
+- **The cross compiler for Windows**, the base of a self-contained Windows
+  client built on Linux, is built on demand by `scripts/build-gcc-mingw.sh`,
+  never by the CI or the other scripts, in `~/software/gcc-16.2.0-mingw`: GCC
+  16.2.0 for C and C++, the native compiler's release, built with it from the
+  same tarball, with binutils 2.47 and mingw-w64 14.0.0 (the Windows and C
+  runtime headers, the C runtime and winpthreads). No prebuilt toolchain fits:
+  the MinGW-w64 ones with GCC run on Windows, llvm-mingw is Clang, and EL9's
+  (`mingw64-gcc` in CodeReady Builder) is GCC 14. Every download is checked
+  against its signature before anything is built or removed: GCC and binutils
+  with the GNU keyring, mingw-w64 with the key of its release manager, fetched
+  once from keyserver.ubuntu.com and required by its fingerprint, which the
+  script fixes.
+  - **The target**: Windows 10 or later, the minimum of Qt 6.12, with the
+    Universal C Runtime (`--with-default-msvcrt=ucrt`,
+    `--with-default-win32-winnt=0x0A00`); SEH exceptions; POSIX threads on
+    winpthreads (`--enable-threads=posix`), as in Qt's MinGW, MSYS2 and
+    Fedora; GCC 16's native Windows TLS for `thread_local` (`--enable-tls`,
+    which needs binutils 2.44 or later) instead of the emulated one; and
+    libstdc++'s `steady_clock` and sleeps on the `clock_gettime` and
+    `nanosleep` of winpthreads (`--enable-libstdcxx-time=yes`: by default,
+    on mingw, `steady_clock` is the wall clock).
+  - **Static runtime only** (`--disable-shared`, and winpthreads static): what
+    the compiler builds carries libgcc, libstdc++ and winpthreads inside,
+    without `-static`, and needs only system DLLs, `KERNEL32.dll` and the
+    UCRT's. The price is that no two DLLs can share one runtime, so it cannot
+    build a shared Qt for Windows; that would take the compiler again with
+    `--enable-shared`.
+  - **The prefix is also the sysroot** (`--with-sysroot`): mingw-w64 goes to
+    `x86_64-w64-mingw32/{include,lib}`, next to libstdc++, and a relative link
+    `mingw` points to it, because GCC looks for the system headers and
+    libraries in `<sysroot>/mingw/include` and `<sysroot>/mingw/lib`. With the
+    sysroot inside the prefix, GCC and ld find it relative to themselves, so
+    the directory can be moved.
+  - **The build** has no bootstrap, as no cross compiler does, and runs in a
+    work directory of its own in `~/software/src`, removed at the end (the
+    tarballs and keyrings stay): binutils; the mingw-w64 headers; GCC alone
+    (`make all-gcc`); with it, the C runtime and winpthreads, static because
+    libgcc does not exist yet; and the rest of GCC. Meanwhile its `bin` goes
+    first in the PATH, since the configure scripts of mingw-w64 find the cross
+    tools by name and EL9's are in `/usr/bin`. The compiler's programs
+    (`cc1plus`, `lto1`, ...) link libstdc++ statically, so they need no run
+    path. `x86_64-w64-mingw32/lib/libstdc++.a`, installed last, marks a
+    complete installation: without it, the script removes the prefix and
+    builds again from the start. It takes about a quarter of an hour with 12
+    cores (13 minutes on the development machine) and 9 GB of disk at its
+    peak; the compiler takes 0.5 GB, and the three tarballs 150 MB.
 - Presets: `native` (Debug, `build/native`) and `wasm` (Release, `build/wasm`).
   `scripts/build-wasm.sh` also copies the web files to `build/web`, the docroot
   used by `scripts/run-server.sh`. The `static` preset (Release,

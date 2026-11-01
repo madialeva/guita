@@ -77,3 +77,8 @@ First version: a proof of concept of the architecture, to be released as 0.1.0.
   are built from source by `scripts/build-static-deps.sh`.
 - `scripts/check-version.sh <branch>` checks the project version against a
   `develop/vX.Y.Z` or `release/vX.Y.Z` branch.
+- GCC 16.2 cross compiler for 64-bit Windows (`x86_64-w64-mingw32`), built on
+  demand and without root privileges by `scripts/build-gcc-mingw.sh` from the
+  signed sources of GCC, binutils and mingw-w64: the first step towards a
+  self-contained Windows client built on Linux. What it builds carries the C++
+  runtime inside and needs only DLLs of Windows 10 or later.
