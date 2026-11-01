@@ -91,22 +91,19 @@ backend. See
 
 ### To build
 
-| Software | Version | Needed for |
-|---|---|---|
-| GCC, built from the GNU sources (C++26 with reflection) | 16.2 | server, desktop client, tests |
-| CMake and Ninja | CMake 3.25+ | everything |
-| Qt, desktop kit (`gcc_64`) | 6.12 | native client; host tools of the WASM build |
-| Qt, WebAssembly kit (`wasm_singlethread`) | 6.12 | web client |
-| Emscripten (emsdk) | 5.0.5, the release Qt 6.12 requires | web client |
-| Python | 3.10+ | Emscripten |
-| libpqxx | 8.0 | server and standalone client |
-| cpp-httplib (header-only, built with zlib) | 0.61 | server and standalone client |
-| protobuf (C++ library and `protoc`), also built for WebAssembly | 36.2 | the contract, both sides |
-| buf | 1.74 | contract style and compatibility checks |
-| libpq and zlib development files | — | libpqxx, cpp-httplib |
+guita takes its toolchain from [toolchain-cpp](https://github.com/madialeva/toolchain-cpp)
+**v0.1.0**, cloned next to it, which builds it without root privileges:
 
-Both Qt kits need Qt Quick, Qt Quick Controls, Qt WebSockets, the Linguist
-tools and the `qttasktree` module.
+| toolchain-cpp components | What they are | Needed for |
+|---|---|---|
+| `gcc` | GCC 16.2, built from the GNU sources (C++26 with reflection) | server, desktop client, tests |
+| `qt` | Qt 6.12 desktop kit, with Qt WebSockets and `qttasktree` | native client; host tools of the WASM build |
+| `libpqxx`, `cpp-httplib`, `protobuf`, `buf` | libpqxx 8.0, cpp-httplib 0.61, protobuf 36.2 (with `protoc`), buf 1.74 | backend, the contract, its checks |
+| `qt-wasm`, `protobuf-wasm` | Qt 6.12 WebAssembly kit, emsdk 5.0.5, protobuf for WebAssembly | web client |
+| `qt-static`, `libpq-static` | static Qt 6.12 and libpq 18.6 | self-contained desktop client |
+
+Besides them: CMake 3.25+ and Ninja, and the development files of libpq and
+zlib.
 
 ### To run
 
@@ -134,38 +131,27 @@ tools and the libraries the backend depends on:
 
 ```sh
 # Fedora, RHEL and derivatives
-sudo dnf install gcc-c++ make m4 bzip2 xz wget gnupg2 cmake ninja-build git zlib-devel libpq-devel postgresql-server
+sudo dnf install gcc-c++ make m4 bzip2 xz curl gnupg2 cmake ninja-build git zlib-devel libpq-devel postgresql-server
 
 # Debian and Ubuntu
-sudo apt install build-essential m4 bzip2 xz-utils wget gpgv cmake ninja-build git zlib1g-dev libpq-dev postgresql
+sudo apt install build-essential m4 bzip2 xz-utils curl gpgv cmake ninja-build git zlib1g-dev libpq-dev postgresql
 ```
 
-**GCC 16, Qt, Emscripten and the backend libraries** — install them with your
-usual tools (Qt online installer, emsdk, GCC and the libraries from source), or
-let the repository scripts do it without root privileges under `$SOFTWARE_DIR`
-(default `~/software`):
+**The toolchain** — clone toolchain-cpp next to guita, at the version guita
+pins, and install its components:
 
 ```sh
-scripts/build-gcc.sh  # GCC 16.2 from the GNU sources (half an hour to an hour), the native compiler
-scripts/setup-qt.sh   # Qt 6.12 desktop + WASM kits (aqtinstall), emsdk 5.0.5, Python 3.12 via uv
-scripts/build-deps.sh # libpqxx, cpp-httplib and protobuf (native and WASM) from source, and buf
+git clone --branch v0.1.0 https://github.com/madialeva/toolchain-cpp.git ../toolchain-cpp
+../toolchain-cpp/install.sh gcc qt libpqxx cpp-httplib protobuf buf   # server, desktop client, tests
+../toolchain-cpp/install.sh qt-wasm protobuf-wasm                    # and the web client
 ```
 
-Run them in this order: `build-deps.sh` builds the native libraries with the
-GCC of `build-gcc.sh`, and protobuf for the web client with the emsdk that
-`setup-qt.sh` installs (without it, that part is skipped with a warning). The
-web client is built by Emscripten's Clang, also in C++26.
-
-`setup-qt.sh` needs [uv](https://docs.astral.sh/uv/) to provide the Python
-that Emscripten requires when the system one is older than 3.10. To build only
-the server, the desktop client and the tests, `scripts/setup-qt.sh
---desktop-only` installs just the desktop kit, without the WebAssembly kit,
-emsdk or Python. The CMake
-presets look for GCC, Qt and the libraries where these scripts install them;
-when they live elsewhere, pass `-DCMAKE_CXX_COMPILER=<g++ 16>` and
-`-DCMAKE_PREFIX_PATH="<qt-prefix>;<libpqxx-prefix>;..."` to the native
-build, or add a `CMakeUserPresets.json` (for the web build it also sets the Qt
-WASM toolchain file, `QT_HOST_PATH` and `EMSDK`).
+GCC takes from half an hour to an hour; the rest, a few minutes. The web
+client's kit needs [uv](https://docs.astral.sh/uv/) for the Python that
+Emscripten requires. The CMake presets look for everything in
+`../toolchain-cpp/software`; with toolchain-cpp somewhere else, set its paths
+in a `CMakeUserPresets.json` and `SOFTWARE_DIR` for the scripts. See
+toolchain-cpp's README for its system requirements.
 
 ## Database
 
@@ -193,26 +179,17 @@ scripts/build-wasm.sh
 
 A self-contained desktop client, a single executable that can be copied to
 another Linux machine and run without installing Qt, is built on demand, as
-the web client carries Qt inside `client.wasm`. It needs a static Qt and libpq,
-built once from source in about half an hour; the static Qt is shared with
-gambasse, whose script builds the same kit. On Fedora and RHEL, building Qt
-also needs `xcb-util-devel`, `xcb-util-wm-devel`, `xcb-util-image-devel`,
-`xcb-util-keysyms-devel`, `xcb-util-renderutil-devel`, `xcb-util-cursor-devel`
-and `libxkbcommon-x11-devel`:
+the web client carries Qt inside `client.wasm`. It needs toolchain-cpp's static
+Qt and libpq, built once from source in about half an hour (the X11 development
+packages they need are in toolchain-cpp's documentation):
 
 ```sh
-scripts/build-static-deps.sh # static Qt 6.12 and libpq 18.6 under ~/software, once
-scripts/build-static.sh      # build/dist/client, checked to need only system libraries
+../toolchain-cpp/install.sh qt-static libpq-static # static Qt 6.12 and libpq 18.6, once
+scripts/build-static.sh                            # build/dist/client, checked to need only system libraries
 ```
 
-Its Windows version will be cross-built on Linux. The first piece is a GCC 16.2
-cross compiler for 64-bit Windows, built once from source, on demand, in about a
-quarter of an hour:
-
-```sh
-scripts/build-gcc-mingw.sh          # GCC 16.2 for x86_64-w64-mingw32 under ~/software, once
-scripts/build-gcc-mingw.sh --check  # build a test program and run it under Wine
-```
+Its Windows version will be cross-built on Linux, with toolchain-cpp's GCC 16.2
+cross compiler for 64-bit Windows (`../toolchain-cpp/install.sh gcc-mingw`).
 
 ## Running
 
@@ -287,7 +264,7 @@ src/proto/     client-backend contract (Protobuf)
 src/backend/   backend: core (domain, persistence), api (RPC router, HTTP), server
 src/client/    Qt/QML client, native and WebAssembly
 tests/         automated tests (Qt Test, CTest)
-scripts/       dependency setup, web and static builds, server launcher, database SQL
+scripts/       web and static builds, server launcher, checks, database SQL
 docs/          technical documentation
 openspec/      specs and change proposals: how the project is developed with OpenSpec
 ```

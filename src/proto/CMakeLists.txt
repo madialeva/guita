@@ -38,7 +38,7 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN)
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
     else()
         add_test(NAME contract_lint COMMAND ${CMAKE_COMMAND} -E echo
-            "error: buf not found; install it with scripts/build-deps.sh")
+            "error: buf not found; install it with the buf component of toolchain-cpp")
         set_tests_properties(contract_lint PROPERTIES WILL_FAIL TRUE)
     endif()
     set_tests_properties(contract_lint PROPERTIES LABELS unit)

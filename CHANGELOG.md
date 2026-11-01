@@ -49,11 +49,14 @@ First version: a proof of concept of the architecture, to be released as 0.1.0.
 - The server also serves the web client.
 - Optional shared Bearer token (`API_TOKEN`) for development.
 - English and Spanish user interface, following the system or browser language.
-- Scripts to install the toolchain and libraries without root privileges, build
-  the web client, run the server and create the database.
+- The toolchain comes from [toolchain-cpp](https://github.com/madialeva/toolchain-cpp)
+  0.1.0, cloned next to the project, which builds GCC 16, the Qt 6.12 kits and
+  the libraries without root privileges; the CMake presets, the scripts and the
+  CI find it there with no environment variables.
+- Scripts to build the web client, run the server and create the database.
 - C++26 code base: the server, the desktop client and the tests are built with
-  GCC 16, which `scripts/build-gcc.sh` builds from the GNU sources without root
-  privileges, and the web client with Emscripten's Clang.
+  GCC 16, built from the GNU sources, and the web client with Emscripten's
+  Clang.
 - README and architecture documentation.
 - Automated test suite run with `ctest --preset native`: backend, RPC API,
   client and QML amount logic, with an ephemeral PostgreSQL container started
@@ -68,19 +71,10 @@ First version: a proof of concept of the architecture, to be released as 0.1.0.
   compatible with the development branch and that the version in
   `CMakeLists.txt` matches the branch name. A status badge in the README shows
   the result.
-- `scripts/setup-qt.sh --desktop-only` installs only the desktop Qt kit, enough
-  for the server, the desktop client and the tests.
 - Self-contained desktop client, built on demand with `scripts/build-static.sh`
   (`static` preset): a single executable with Qt, libpq and the C++ runtime
   linked in, which runs on other Linux machines with glibc 2.34 or later and an
   X11 desktop without installing Qt. Its static dependencies, Qt 6.12 and libpq,
-  are built from source by `scripts/build-static-deps.sh`.
+  come from toolchain-cpp.
 - `scripts/check-version.sh <branch>` checks the project version against a
   `develop/vX.Y.Z` or `release/vX.Y.Z` branch.
-- GCC 16.2 cross compiler for 64-bit Windows (`x86_64-w64-mingw32`), built on
-  demand and without root privileges by `scripts/build-gcc-mingw.sh` from the
-  signed sources of GCC, binutils and mingw-w64: the first step towards a
-  self-contained Windows client built on Linux. What it builds carries the C++
-  runtime inside and needs only DLLs of Windows 10 or later, which
-  `scripts/build-gcc-mingw.sh --check` verifies on a test program, running it
-  under Wine when Wine is installed.

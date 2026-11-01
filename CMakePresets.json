@@ -3,13 +3,13 @@
   "configurePresets": [
     {
       "name": "native",
-      "displayName": "Native (GCC 16.2, Qt 6.12 + backend libraries in ~/software)",
+      "displayName": "Native (GCC 16.2, Qt 6.12 + backend libraries in ../toolchain-cpp)",
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build/native",
       "cacheVariables": {
-        "CMAKE_CXX_COMPILER": "$env{HOME}/software/gcc-16.2.0/bin/g++",
+        "CMAKE_CXX_COMPILER": "${sourceParentDir}/toolchain-cpp/software/gcc-16.2.0/bin/g++",
         "CMAKE_BUILD_TYPE": "Debug",
-        "CMAKE_PREFIX_PATH": "$env{HOME}/software/Qt/6.12.0/gcc_64;$env{HOME}/software/libpqxx-8.0.2;$env{HOME}/software/cpp-httplib-0.61.0;$env{HOME}/software/protobuf-36.2;$env{HOME}/software/buf-1.74.0"
+        "CMAKE_PREFIX_PATH": "${sourceParentDir}/toolchain-cpp/software/Qt/6.12.0/gcc_64;${sourceParentDir}/toolchain-cpp/software/libpqxx-8.0.2;${sourceParentDir}/toolchain-cpp/software/cpp-httplib-0.61.0;${sourceParentDir}/toolchain-cpp/software/protobuf-36.2;${sourceParentDir}/toolchain-cpp/software/buf-1.74.0"
       }
     },
     {
@@ -17,28 +17,28 @@
       "displayName": "WebAssembly (Qt 6.12 wasm_singlethread + emsdk 5.0.5)",
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build/wasm",
-      "toolchainFile": "$env{HOME}/software/Qt/6.12.0/wasm_singlethread/lib/cmake/Qt6/qt.toolchain.cmake",
+      "toolchainFile": "${sourceParentDir}/toolchain-cpp/software/Qt/6.12.0/wasm_singlethread/lib/cmake/Qt6/qt.toolchain.cmake",
       "environment": {
-        "EMSDK": "$env{HOME}/software/emsdk",
+        "EMSDK": "${sourceParentDir}/toolchain-cpp/software/emsdk",
         "EMSDK_PYTHON": "$env{HOME}/.local/bin/python3.12"
       },
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
-        "QT_HOST_PATH": "$env{HOME}/software/Qt/6.12.0/gcc_64",
-        "CMAKE_PREFIX_PATH": "$env{HOME}/software/protobuf-36.2-wasm",
-        "CMAKE_FIND_ROOT_PATH": "$env{HOME}/software/protobuf-36.2-wasm",
-        "GUITA_HOST_PROTOBUF_DIR": "$env{HOME}/software/protobuf-36.2"
+        "QT_HOST_PATH": "${sourceParentDir}/toolchain-cpp/software/Qt/6.12.0/gcc_64",
+        "CMAKE_PREFIX_PATH": "${sourceParentDir}/toolchain-cpp/software/protobuf-36.2-wasm",
+        "CMAKE_FIND_ROOT_PATH": "${sourceParentDir}/toolchain-cpp/software/protobuf-36.2-wasm",
+        "GUITA_HOST_PROTOBUF_DIR": "${sourceParentDir}/toolchain-cpp/software/protobuf-36.2"
       }
     },
     {
       "name": "static",
-      "displayName": "Self-contained desktop client (GCC 16.2, static Qt 6.12 and libpq in ~/software)",
+      "displayName": "Self-contained desktop client (GCC 16.2, static Qt 6.12 and libpq in ../toolchain-cpp)",
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build/static",
       "cacheVariables": {
-        "CMAKE_CXX_COMPILER": "$env{HOME}/software/gcc-16.2.0/bin/g++",
+        "CMAKE_CXX_COMPILER": "${sourceParentDir}/toolchain-cpp/software/gcc-16.2.0/bin/g++",
         "CMAKE_BUILD_TYPE": "Release",
-        "CMAKE_PREFIX_PATH": "$env{HOME}/software/Qt/6.12.0-static;$env{HOME}/software/libpq-18.6-static;$env{HOME}/software/libpqxx-8.0.2;$env{HOME}/software/cpp-httplib-0.61.0;$env{HOME}/software/protobuf-36.2",
+        "CMAKE_PREFIX_PATH": "${sourceParentDir}/toolchain-cpp/software/Qt/6.12.0-static;${sourceParentDir}/toolchain-cpp/software/libpq-18.6-static;${sourceParentDir}/toolchain-cpp/software/libpqxx-8.0.2;${sourceParentDir}/toolchain-cpp/software/cpp-httplib-0.61.0;${sourceParentDir}/toolchain-cpp/software/protobuf-36.2",
         "GUITA_STATIC": "ON",
         "BUILD_TESTING": "OFF"
       }

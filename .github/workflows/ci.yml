@@ -1,7 +1,7 @@
 # Builds the project and runs the whole test suite on every push to a
 # development or release branch and on every pull request toward one, inside the
 # official image of the project's GCC, with the rest of the toolchain installed by
-# the repository scripts and cached (docs/architecture.md §10.4)
+# toolchain-cpp, at the version guita pins, and cached (docs/architecture.md §10.4)
 name: CI
 
 on:
@@ -24,8 +24,8 @@ jobs:
     # Required by the branch rulesets: keep this name stable
     name: Build and test
     runs-on: ubuntu-24.04
-    # GCC built from the GNU sources with the options scripts/build-gcc.sh uses
-    # locally: the same compiler on both sides
+    # GCC built from the GNU sources with the options of toolchain-cpp's gcc
+    # component, which builds it locally: the same compiler on both sides
     container: gcc:16.2.0-trixie
     # A cold run builds protobuf with abseil
     timeout-minutes: 90
@@ -47,23 +47,37 @@ jobs:
 
     env:
       GUITA_TEST_DB: host=postgres port=5432 user=postgres password=guita-ci dbname=postgres
+      # The version of toolchain-cpp guita pins, and the components of the native build
+      TOOLCHAIN_CPP_REF: v0.1.0
+      TOOLCHAIN_CPP_COMPONENTS: qt libpqxx cpp-httplib protobuf buf
 
+    # guita and toolchain-cpp are checked out side by side, as in local work: the
+    # presets name the toolchain from guita's parent directory
     defaults:
       run:
         shell: bash
+        working-directory: guita
 
     steps:
       # The whole history, so that check-contract.sh has origin/develop/vX.Y.Z
       - uses: actions/checkout@v7
         with:
+          path: guita
           fetch-depth: 0
+
+      # The toolchain at the version guita pins
+      - uses: actions/checkout@v7
+        with:
+          repository: madialeva/toolchain-cpp
+          ref: ${{ env.TOOLCHAIN_CPP_REF }}
+          path: toolchain-cpp
 
       # The checkout belongs to the runner's user, not to the container's root:
       # git refuses it, and the clone of it buf makes, unless they are trusted
       - name: Trust the checkout
         run: |
-          git config --global --add safe.directory "$GITHUB_WORKSPACE"
-          git config --global --add safe.directory "$GITHUB_WORKSPACE/.git"
+          git config --global --add safe.directory "$GITHUB_WORKSPACE/guita"
+          git config --global --add safe.directory "$GITHUB_WORKSPACE/guita/.git"
 
       # The branch pushed to, or the base branch of the pull request; a manual
       # run has no branch to compare with
@@ -73,18 +87,18 @@ jobs:
           BRANCH: ${{ github.base_ref || github.ref_name }}
         run: scripts/check-version.sh "$BRANCH"
 
-      # The version of scripts/build-gcc.sh, so that the local compiler and this
+      # The GCC of the pinned toolchain-cpp, so that the local compiler and this
       # image cannot drift apart
-      - name: Check the compiler against scripts/build-gcc.sh
+      - name: Check the compiler against toolchain-cpp
         run: |
-          expected="$(sed -n 's/^GCC_VERSION=.*:-\([0-9.]*\)}.*/\1/p' scripts/build-gcc.sh)"
+          source ../toolchain-cpp/versions.sh
           actual="$(g++ -dumpfullversion)"
-          if [[ "$actual" != "$expected" ]]; then
-              echo "::error::The image has GCC $actual, but scripts/build-gcc.sh installs GCC $expected:" \
-                   "change the image tag and the script together"
+          if [[ "$actual" != "$GCC_VERSION" ]]; then
+              echo "::error::The image has GCC $actual, but toolchain-cpp $TOOLCHAIN_CPP_REF has GCC" \
+                   "$GCC_VERSION: change the image tag and TOOLCHAIN_CPP_REF together"
               exit 1
           fi
-          echo "GCC $actual, as scripts/build-gcc.sh"
+          echo "GCC $actual, as toolchain-cpp $TOOLCHAIN_CPP_REF"
 
       # Build tools and the libraries the project and Qt take from the system
       - name: Install the system packages
@@ -95,38 +109,39 @@ jobs:
             libgl-dev libegl-dev libxkbcommon-dev libfontconfig1 libfreetype6 \
             libglib2.0-0t64 libdbus-1-3
 
-      # The presets and scripts look for GCC where scripts/build-gcc.sh installs
-      # it; the image has it in /usr/local. The link stays out of the cache
-      - name: Link the image's GCC where the presets look for it
+      # The image has GCC in /usr/local: toolchain-cpp's gcc component takes a link
+      # to it as installed, so nothing builds GCC here. The link stays out of the cache
+      - name: Link the image's GCC as toolchain-cpp's native compiler
         run: |
-          mkdir -p ~/software
-          ln -sfn /usr/local ~/software/gcc-16.2.0
+          source ../toolchain-cpp/versions.sh
+          mkdir -p ../toolchain-cpp/software
+          ln -sfn /usr/local "../toolchain-cpp/software/gcc-$GCC_VERSION"
 
-      # Qt and the libraries in ~/software, where the presets look for them.
-      # Saved right after installing, so that a run with failing tests keeps it
+      # Qt and the libraries in toolchain-cpp/software, where the presets look for
+      # them. Saved right after installing, so that a run with failing tests keeps it
       - name: Restore the toolchain
         id: toolchain
         uses: actions/cache/restore@v6
         with:
           path: |
-            ~/software
-            !~/software/gcc-16.2.0
-          key: toolchain-gcc-16.2.0-trixie-${{ hashFiles('scripts/setup-qt.sh', 'scripts/build-deps.sh') }}
+            toolchain-cpp/software
+            !toolchain-cpp/software/gcc-*
+          key: toolchain-cpp-${{ env.TOOLCHAIN_CPP_REF }}-gcc-16.2.0-trixie-${{ env.TOOLCHAIN_CPP_COMPONENTS }}
 
       - name: Install the toolchain
         if: steps.toolchain.outputs.cache-hit != 'true'
         run: |
-          scripts/setup-qt.sh --desktop-only
-          scripts/build-deps.sh
-          rm -rf ~/software/src ~/software/aqt-venv ~/software/aqtinstall.log
+          ../toolchain-cpp/install.sh $TOOLCHAIN_CPP_COMPONENTS
+          rm -rf ../toolchain-cpp/software/src ../toolchain-cpp/software/aqt-venv \
+            ../toolchain-cpp/software/aqtinstall.log
 
       - name: Save the toolchain
         if: steps.toolchain.outputs.cache-hit != 'true'
         uses: actions/cache/save@v6
         with:
           path: |
-            ~/software
-            !~/software/gcc-16.2.0
+            toolchain-cpp/software
+            !toolchain-cpp/software/gcc-*
           key: ${{ steps.toolchain.outputs.cache-primary-key }}
 
       - name: Configure
