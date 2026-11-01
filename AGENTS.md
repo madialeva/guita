@@ -222,8 +222,10 @@ context properties, `qmlRegister*` calls or objects injected from `main.cpp`:
   scripts. A new system dependency also goes to the workflow's `apt` list (of
   Debian trixie); it is described in `docs/architecture.md` §10.4. A new GCC
   version changes at once in `scripts/build-gcc.sh`, `scripts/build-deps.sh`,
-  `scripts/build-gcc-mingw.sh` (the Windows cross compiler, rebuilt with it),
-  the `native` preset and the image of the CI.
+  `scripts/build-static-deps.sh`, `scripts/build-gcc-mingw.sh` (the Windows
+  cross compiler, rebuilt with it), the presets that set the compiler
+  (`native` and `static`) and the CI workflow (its image, the link to it in
+  `~/software` and its cache keys).
 - `tests/web/dead-keys.mjs` checks by hand, outside `ctest`, that the web
   client composes accents typed with dead keys (`docs/architecture.md` §5.3);
   repeat it when Qt is upgraded.
