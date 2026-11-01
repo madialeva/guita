@@ -43,4 +43,4 @@
   - lanzada con `DISPLAY=:99`, el Xvfb de las comprobaciones gráficas, `xwininfo -root -children` no muestra ninguna ventana nueva;
   - una copia del prefijo en `tmp/` pasa `--check` igual que el original, porque el directorio se puede mover. Después se borra la copia.
 - [x] 2.3 Documentar la comprobación en `docs/architecture.md` §8: qué compila, qué DLLs admite, el TLS, Wine y los modos `--check`. Verificar que coincide con el script y que `ctest --preset native` pasa completo.
-- [ ] 2.4 El usuario revisa el compilador y la comprobación y da el visto bueno. Opcional: ejecutar el programa de prueba, compilado en `tmp/` con el compilador instalado, en un Windows 10 u 11 de 64 bits.
+- [x] 2.4 El usuario revisa el compilador y la comprobación y da el visto bueno. Opcional: ejecutar el programa de prueba, compilado en `tmp/` con el compilador instalado, en un Windows 10 u 11 de 64 bits.
