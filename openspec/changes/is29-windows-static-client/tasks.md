@@ -31,12 +31,12 @@
 
 Con Wine en el Xvfb `:99`, un prefijo temporal sin el perfil sRGB y `build/dist/client.exe` copiado a un directorio temporal (decisión 7). Si hizo falta otro backend de RHI, se anota en §9.2.
 
-- [ ] 3.1 Modo conectado, contra `scripts/run-server.sh`. Verificar:
+- [x] 3.1 Modo conectado, contra `scripts/run-server.sh`. Verificar:
   - que lista las facturas y crea una nueva, que aparece en la lista;
   - que las capturas con `LANG=es_ES.UTF-8` y `LANG=C` muestran las mismas vistas y textos que el cliente nativo en el mismo idioma.
-- [ ] 3.2 Modo autónomo, contra un `postgres:18.6` efímero vacío. Verificar que crea las tablas, lista y crea facturas, y que `ss -ltnp` no muestra ningún puerto abierto por los procesos de Wine.
-- [ ] 3.3 Modo autónomo con TLS: el contenedor con `ssl=on`, un certificado autofirmado generado en `tmp/` y `sslmode=require` en la cadena de conexión. Verificar con `pg_stat_ssl`, desde `psql`, que la conexión del cliente va cifrada, y que con `ssl=off` el cliente falla con un error de TLS.
-- [ ] 3.4 `wss://`: un HAProxy efímero delante de `scripts/run-server.sh`, con la configuración de §9.1 y un certificado autofirmado generado en `tmp/`. Verificar:
+- [x] 3.2 Modo autónomo, contra un `postgres:18.6` efímero vacío. Verificar que crea las tablas, lista y crea facturas, y que `ss -ltnp` no muestra ningún puerto abierto por los procesos de Wine.
+- [x] 3.3 Modo autónomo con TLS: el contenedor con `ssl=on`, un certificado autofirmado generado en `tmp/` y `sslmode=require` en la cadena de conexión. Verificar con `pg_stat_ssl`, desde `psql`, que la conexión del cliente va cifrada, y que con `ssl=off` el cliente falla con un error de TLS.
+- [x] 3.4 `wss://`: un HAProxy efímero delante de `scripts/run-server.sh`, con la configuración de §9.1 y un certificado autofirmado generado en `tmp/`. Verificar:
   - que, sin confiar en el certificado, el cliente no se conecta, indica que el servidor no está disponible y no se cierra;
   - que, con el certificado importado en el almacén Root de usuario del prefijo de Wine, lista y crea facturas. Si Wine no lo permite, anotarlo en §9.2 y dejar este caso para la tarea 4.1.
 

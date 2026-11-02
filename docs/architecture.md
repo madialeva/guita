@@ -922,6 +922,30 @@ variables as the native client; `API_URL` with `https://` connects through
   `scripts/build-windows.sh --check <executable>` runs only that check. It
   also fails before configuring if a component for Windows is missing, with
   the toolchain-cpp command that installs it.
+- **What was tried under Wine** (10.6, on `Xvfb :99`, with a temporary prefix):
+  - Qt aborts on start in Wine without removing the prefix's sRGB colour
+    profile (`windows/system32/spool/drivers/color`): Wine lacks
+    `mscms.dll.WcsCreateIccProfile`, which Windows has had since Vista;
+  - with Direct3D 11, Qt's default, the window shows its first frame and is
+    not repainted again (no typed text, no list) on a display without a GPU;
+    with `QSG_RHI_BACKEND=opengl` it draws normally. That is Wine's
+    presentation, not the client: Direct3D 11 is checked on a real Windows;
+  - connected mode, against `scripts/run-server.sh`, lists and creates
+    invoices, with the same views and texts as the native client in Spanish
+    and English, in Windows' Qt Quick Controls style;
+  - standalone mode, against an empty PostgreSQL 18.6, applies the migrations,
+    lists and creates invoices and opens no port; with `sslmode=require` to a
+    server with TLS, `pg_stat_ssl` shows the connection encrypted (TLS 1.3);
+    against a server without TLS it ends with status 1, as the native client
+    does after printing libpq's error. A GUI executable has no console, so on
+    Windows that message is not visible;
+  - `wss://`, through HAProxy with the configuration of §9.1 and a self-signed
+    certificate: while Windows does not trust the certificate the client does
+    not connect, shows that the backend is not reachable and keeps retrying;
+    with the certificate in the user's Root store it lists and creates
+    invoices. Wine's `certutil` does not write to the store, so it was added
+    with `CertAddEncodedCertificateToStore`, as `certutil -user -addstore Root`
+    does on Windows.
 
 ## 10. Testing
 

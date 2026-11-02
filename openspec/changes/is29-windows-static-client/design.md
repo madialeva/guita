@@ -128,6 +128,14 @@ La spec exige que nada de esto lo necesiten las pruebas ni el CI.
   Si Qt Quick no dibuja con Direct3D 11 en Wine, se prueba con `QSG_RHI_BACKEND=opengl` y se anota.
 - **En un Windows 10 u 11 real,** el usuario copia solo `client.exe` y prueba los dos modos, y `wss://` contra el HAProxy de la prueba.
 
+Resultados al implementar:
+- **El código no necesitó ningún cambio** para compilar en Windows. Solo hubo que activar `WIN32_EXECUTABLE` a mano (decisión 4).
+- **El ejecutable** pesa 54 MB sin símbolos e importa 52 DLLs, todas de Windows 10 1809.
+- **Direct3D 11 en Wine sobre Xvfb, sin GPU,** muestra el primer fotograma y no vuelve a pintar: no se ve el texto que se escribe ni la lista, aunque el cliente funciona (las facturas se guardan). Con `QSG_RHI_BACKEND=opengl` se dibuja bien, así que todas las pruebas en Wine usan OpenGL. Direct3D 11 queda para el Windows real (tarea 4.1).
+- **Los dos modos, TLS hacia PostgreSQL y `wss://`** funcionaron en Wine como dice §9.2.
+  - El `certutil` de Wine devuelve 0 sin escribir en el almacén, así que el certificado se añadió con un programa mínimo que llama a `CertAddEncodedCertificateToStore` en el almacén Root del usuario, lo mismo que hace `certutil -user -addstore Root` en Windows.
+  - Con `ssl=off` y `sslmode=require`, el cliente termina con estado 1 sin abrir la ventana, como el nativo. Pero en Windows no se ve el mensaje: un ejecutable gráfico no tiene consola. Mostrar los errores de arranque en un diálogo queda fuera de este change.
+
 ### 8. Documentación
 
 - **`docs/architecture.md`:**
