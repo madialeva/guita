@@ -32,7 +32,16 @@ if(NOT EMSCRIPTEN)
     target_compile_definitions(client PRIVATE APP_STANDALONE_SUPPORT)
 endif()
 
-if(GUITA_STATIC)
+if(GUITA_STATIC AND WIN32)
+    # A static Qt links its plugins into the executable, so they are fixed here. For
+    # Windows: its platform, and TLS through Windows' own (Schannel) for wss://; the
+    # rest is left out as on Linux. A GUI executable: it opens no console
+    set_target_properties(client PROPERTIES WIN32_EXECUTABLE TRUE)
+    qt_import_plugins(client
+        INCLUDE_BY_TYPE platforms Qt6::QWindowsIntegrationPlugin
+        INCLUDE_BY_TYPE tls Qt6::QSchannelBackendPlugin
+        EXCLUDE_BY_TYPE imageformats generic networkinformation qmltooling)
+elseif(GUITA_STATIC)
     # A static Qt links its plugins into the executable, so they are fixed here:
     # X11 with its OpenGL integrations, the input methods that compose dead keys,
     # the desktop portal's theme, and TLS through the system's OpenSSL (loaded at run

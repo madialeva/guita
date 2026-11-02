@@ -297,12 +297,13 @@ include directory; project code never relies on it.
 
 - The toolchain comes from [toolchain-cpp](https://github.com/madialeva/toolchain-cpp),
   cloned next to guita (`~/src/toolchain-cpp`) at the version guita pins,
-  **v0.1.0**, which installs it without sudo in its `software/` directory:
+  **v0.2.0**, which installs it without sudo in its `software/` directory:
   - `gcc qt libpqxx cpp-httplib protobuf buf` for the native build and the
     tests;
   - `qt-wasm protobuf-wasm` for the web client;
   - `qt-static libpq-static` for the self-contained client;
-  - `gcc-mingw` for Windows (#29).
+  - `qt-mingw libpq-mingw libpqxx-mingw cpp-httplib-mingw protobuf-mingw`
+    (with `gcc-mingw` and `openssl-mingw`) for the Windows client.
 
   guita has no script that builds them. The presets name them from
   `${sourceParentDir}/toolchain-cpp/software` (not `${sourceDir}/..`, which
@@ -330,6 +331,14 @@ include directory; project code never relies on it.
   native`, the CI nor the end of a change need it, unless the change touches
   the static build itself. A change that adds a Qt module adds it as well to
   the module list of toolchain-cpp's `qt-static` component.
+- The Windows client (`windows` preset, `scripts/build-windows.sh`, which
+  cross-builds `build/dist/client.exe` and checks that it imports only DLLs of
+  its list of Windows DLLs) is built only on demand too, under the same rule.
+  A Qt module the client needs also goes to toolchain-cpp's `qt-mingw`. It is
+  tried under Wine on `Xvfb :99`, with a temporary prefix (never `~/.wine`)
+  without its sRGB colour profile: Wine 10.6 lacks
+  `mscms.dll.WcsCreateIccProfile`, and Qt aborts on start without that
+  workaround.
 - GUI checks run on a virtual display (`Xvfb :99`), never on the user's desktop:
   input simulation (`xdotool`) must not reach the user's windows. In Chrome on
   Xvfb, WebGL needs `--enable-unsafe-swiftshader --use-angle=swiftshader`.

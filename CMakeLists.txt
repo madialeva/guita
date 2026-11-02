@@ -4,8 +4,9 @@ project(Guita VERSION 0.1.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# The self-contained desktop client of the static preset (scripts/build-static.sh,
-# docs/architecture.md §9.2): Qt, libpq and the C++ runtime linked into the executable
+# The self-contained desktop client of the static and windows presets
+# (scripts/build-static.sh, scripts/build-windows.sh, docs/architecture.md §9.2): Qt,
+# libpq and the C++ runtime linked into the executable
 option(GUITA_STATIC "Link Qt, libpq and the C++ runtime statically into the native executables" OFF)
 
 # The native compiler: GCC 16 or later, with C++26 reflection (the gcc component of
@@ -55,6 +56,12 @@ find_package(Qt6 6.12 REQUIRED COMPONENTS Core Gui Qml Quick WebSockets Linguist
 if(GUITA_STATIC)
     get_target_property(GUITA_QT_CORE_TYPE Qt6::Core TYPE)
     if(NOT GUITA_QT_CORE_TYPE STREQUAL "STATIC_LIBRARY")
+        if(WIN32)
+            message(FATAL_ERROR
+                "GUITA_STATIC for Windows needs Qt for Windows, but the Qt found in ${Qt6_DIR} "
+                "is shared: install Qt/6.12.0-mingw with the qt-mingw component of toolchain-cpp "
+                "and configure with the windows preset, which uses it")
+        endif()
         message(FATAL_ERROR
             "GUITA_STATIC needs a static Qt, but the Qt found in ${Qt6_DIR} is shared: install "
             "the static one, Qt/6.12.0-static, with the qt-static component of toolchain-cpp "

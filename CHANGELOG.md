@@ -50,7 +50,7 @@ First version: a proof of concept of the architecture, to be released as 0.1.0.
 - Optional shared Bearer token (`API_TOKEN`) for development.
 - English and Spanish user interface, following the system or browser language.
 - The toolchain comes from [toolchain-cpp](https://github.com/madialeva/toolchain-cpp)
-  0.1.0, cloned next to the project, which builds GCC 16, the Qt 6.12 kits and
+  0.2.0, cloned next to the project, which builds GCC 16, the Qt 6.12 kits and
   the libraries without root privileges; the CMake presets, the scripts and the
   CI find it there with no environment variables.
 - Scripts to build the web client, run the server and create the database.
@@ -76,5 +76,12 @@ First version: a proof of concept of the architecture, to be released as 0.1.0.
   linked in, which runs on other Linux machines with glibc 2.34 or later and an
   X11 desktop without installing Qt. Its static dependencies, Qt 6.12 and libpq,
   come from toolchain-cpp.
+- Self-contained client for 64-bit Windows 10 or later, cross-built on Linux on
+  demand with `scripts/build-windows.sh` (`windows` preset): a single
+  `client.exe` with Qt, the embedded backend, libpq with TLS and the C++ runtime
+  linked in, which needs only DLLs of Windows and runs without installing
+  anything, in both modes, also through `wss://`. The script checks every DLL it
+  imports against a list of Windows DLLs. The cross compiler, Qt and the
+  libraries for Windows come from toolchain-cpp.
 - `scripts/check-version.sh <branch>` checks the project version against a
   `develop/vX.Y.Z` or `release/vX.Y.Z` branch.

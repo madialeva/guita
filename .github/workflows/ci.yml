@@ -48,7 +48,7 @@ jobs:
     env:
       GUITA_TEST_DB: host=postgres port=5432 user=postgres password=guita-ci dbname=postgres
       # The version of toolchain-cpp guita pins, and the components of the native build
-      TOOLCHAIN_CPP_REF: v0.1.0
+      TOOLCHAIN_CPP_REF: v0.2.0
       TOOLCHAIN_CPP_COMPONENTS: qt libpqxx cpp-httplib protobuf buf
 
     # guita and toolchain-cpp are checked out side by side, as in local work: the
