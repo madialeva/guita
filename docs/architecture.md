@@ -645,17 +645,17 @@ mode self-contained, without external services.
 ## 8. Toolchain
 
 guita does not build its toolchain: it takes it from
-[toolchain-cpp](https://github.com/madialeva/toolchain-cpp) **v0.1.0**, cloned
+[toolchain-cpp](https://github.com/madialeva/toolchain-cpp) **v0.2.0**, cloned
 next to guita, which builds each piece as a component without root privileges
 into its `software/` directory. How each component is built, with which options
 and why, is in toolchain-cpp's
-[`docs/toolchain.md`](https://github.com/madialeva/toolchain-cpp/blob/v0.1.0/docs/toolchain.md);
+[`docs/toolchain.md`](https://github.com/madialeva/toolchain-cpp/blob/v0.2.0/docs/toolchain.md);
 this section describes what guita uses and requires of it.
 
 | What | Version | toolchain-cpp component |
 |---|---|---|
 | GCC, the native compiler (C++26 with reflection) | 16.2.0 | `gcc` (GNU sources, configured as the CI's `gcc:16.2.0-trixie` image) |
-| Qt (desktop), with `qttasktree` and `qtwebsockets` | 6.12.0 LTS | `qt` (aqtinstall) |
+| Qt (desktop), with `qttasktree`, `qtwebsockets` and `qtshadertools` | 6.12.0 LTS | `qt` (aqtinstall) |
 | Qt (`wasm_singlethread`), Emscripten | 6.12.0 LTS, 5.0.5 | `qt-wasm` (aqtinstall, emsdk) |
 | libpqxx | 8.0.2 (requires C++20) | `libpqxx` (static, PIC, C++26) |
 | cpp-httplib | 0.61.0 | `cpp-httplib` (header-only, with zlib) |
@@ -972,7 +972,7 @@ component builds locally, §8):
    the sources and aqt's environment, and saves it at once, so that a run whose
    tests fail keeps it. The key is the pinned version, the image (whose system
    and compiler the libraries are built with) and the components
-   (`toolchain-cpp-v0.1.0-gcc-16.2.0-trixie-<components>`): pinning another
+   (`toolchain-cpp-v0.2.0-gcc-16.2.0-trixie-<components>`): pinning another
    version reinstalls everything, and a cold run (mostly protobuf with abseil)
    is covered by the job's timeout;
 7. runs `cmake --preset native`, `cmake --build --preset native` and

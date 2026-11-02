@@ -297,7 +297,7 @@ include directory; project code never relies on it.
 
 - The toolchain comes from [toolchain-cpp](https://github.com/madialeva/toolchain-cpp),
   cloned next to guita (`~/src/toolchain-cpp`) at the version guita pins,
-  **v0.1.0**, which installs it without sudo in its `software/` directory:
+  **v0.2.0**, which installs it without sudo in its `software/` directory:
   - `gcc qt libpqxx cpp-httplib protobuf buf` for the native build and the
     tests;
   - `qt-wasm protobuf-wasm` for the web client;

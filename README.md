@@ -92,12 +92,12 @@ backend. See
 ### To build
 
 guita takes its toolchain from [toolchain-cpp](https://github.com/madialeva/toolchain-cpp)
-**v0.1.0**, cloned next to it, which builds it without root privileges:
+**v0.2.0**, cloned next to it, which builds it without root privileges:
 
 | toolchain-cpp components | What they are | Needed for |
 |---|---|---|
 | `gcc` | GCC 16.2, built from the GNU sources (C++26 with reflection) | server, desktop client, tests |
-| `qt` | Qt 6.12 desktop kit, with Qt WebSockets and `qttasktree` | native client; host tools of the WASM build |
+| `qt` | Qt 6.12 desktop kit, with Qt WebSockets, `qttasktree` and Qt Shader Tools | native client; host tools of the WASM build |
 | `libpqxx`, `cpp-httplib`, `protobuf`, `buf` | libpqxx 8.0, cpp-httplib 0.61, protobuf 36.2 (with `protoc`), buf 1.74 | backend, the contract, its checks |
 | `qt-wasm`, `protobuf-wasm` | Qt 6.12 WebAssembly kit, emsdk 5.0.5, protobuf for WebAssembly | web client |
 | `qt-static`, `libpq-static` | static Qt 6.12 and libpq 18.6 | self-contained desktop client |
@@ -141,7 +141,7 @@ sudo apt install build-essential m4 bzip2 xz-utils curl gpgv cmake ninja-build g
 pins, and install its components:
 
 ```sh
-git clone --branch v0.1.0 https://github.com/madialeva/toolchain-cpp.git ../toolchain-cpp
+git clone --branch v0.2.0 https://github.com/madialeva/toolchain-cpp.git ../toolchain-cpp
 ../toolchain-cpp/install.sh gcc qt libpqxx cpp-httplib protobuf buf   # server, desktop client, tests
 ../toolchain-cpp/install.sh qt-wasm protobuf-wasm                    # and the web client
 ```

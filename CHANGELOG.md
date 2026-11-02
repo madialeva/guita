@@ -50,7 +50,7 @@ First version: a proof of concept of the architecture, to be released as 0.1.0.
 - Optional shared Bearer token (`API_TOKEN`) for development.
 - English and Spanish user interface, following the system or browser language.
 - The toolchain comes from [toolchain-cpp](https://github.com/madialeva/toolchain-cpp)
-  0.1.0, cloned next to the project, which builds GCC 16, the Qt 6.12 kits and
+  0.2.0, cloned next to the project, which builds GCC 16, the Qt 6.12 kits and
   the libraries without root privileges; the CMake presets, the scripts and the
   CI find it there with no environment variables.
 - Scripts to build the web client, run the server and create the database.
