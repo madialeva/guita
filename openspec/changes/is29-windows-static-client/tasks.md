@@ -9,17 +9,17 @@
 
 ## 2. El build del cliente para Windows
 
-- [ ] 2.1 Instalar con toolchain-cpp los componentes para Windows (`install.sh qt-mingw libpq-mingw libpqxx-mingw cpp-httplib-mingw protobuf-mingw`). Verificar que `install.sh --list` los da por instalados y que el compilador cruzado pasa su comprobación con el parche de las excepciones (`components/gcc-mingw.sh --check`).
-- [ ] 2.2 Ajustar CMake según la decisión 4 y añadir los presets `windows` (decisión 3). Anotar en el diseño cualquier cambio que haya pedido el código para compilar en Windows. Verificar:
+- [x] 2.1 Instalar con toolchain-cpp los componentes para Windows (`install.sh qt-mingw libpq-mingw libpqxx-mingw cpp-httplib-mingw protobuf-mingw`). Verificar que `install.sh --list` los da por instalados y que el compilador cruzado pasa su comprobación con el parche de las excepciones (`components/gcc-mingw.sh --check`).
+- [x] 2.2 Ajustar CMake según la decisión 4 y añadir los presets `windows` (decisión 3). Anotar en el diseño cualquier cambio que haya pedido el código para compilar en Windows. Verificar:
   - que `cmake --preset windows` y `cmake --build --preset windows` compilan `client.exe`;
   - que configurar con `GUITA_STATIC=ON` y el toolchain de Windows contra el kit de escritorio, en `tmp/`, falla sin compilar nada y nombra ese Qt y `qt-mingw`;
   - que `cmake --preset native` configura y compila igual que antes, y que `ctest --preset native` pasa;
   - que `scripts/build-wasm.sh` sigue compilando, porque el cambio toca `src/client` y `src/proto`.
-- [ ] 2.3 Crear `scripts/build-windows.sh` según la decisión 2, con su lista de DLLs de Windows (decisión 6), cada una contrastada con la documentación de Microsoft. Verificar:
+- [x] 2.3 Crear `scripts/build-windows.sh` según la decisión 2, con su lista de DLLs de Windows (decisión 6), cada una contrastada con la documentación de Microsoft. Verificar:
   - que genera `build/dist/client.exe` sin símbolos y termina listando sus DLLs, todas de la lista;
   - que `--check` sobre un ejecutable de `tmp/` que importa una DLL de prueba llamada `Qt6Core.dll` falla y la nombra;
   - que con un `SOFTWARE_DIR` de `tmp/` sin el kit `qt-mingw` falla antes de configurar, nombrando lo que falta y la orden de toolchain-cpp que lo instala.
-- [ ] 2.4 Documentar según la decisión 8:
+- [x] 2.4 Documentar según la decisión 8:
   - `docs/architecture.md`: §8, los componentes para Windows y el preset; §9.2, el ejecutable para Windows y su comprobación; §12, las licencias;
   - AGENTS.md: el entorno local;
   - README: la fila de Windows y cómo obtener el ejecutable;

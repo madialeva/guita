@@ -93,7 +93,7 @@ Alternativa descartada: **ampliar `build-static.sh` con `--windows`.** La compro
   - el TLS de Schannel (`Qt6::QSchannelBackendPlugin`), para `wss://`;
   - sin formatos de imagen ni los demás tipos que ya se excluyen en Linux.
 - **`CMakeLists.txt`:** el mensaje del Qt que no es estático nombra el kit `qt-mingw` y `install.sh qt-mingw` cuando el build es para Windows.
-- **El ejecutable** es de subsistema gráfico (`WIN32_EXECUTABLE`, el valor de `qt_add_executable` en Windows): no abre consola.
+- **El ejecutable** es de subsistema gráfico (`WIN32_EXECUTABLE`): no abre consola. `qt_add_executable` no lo activa por sí solo (el primer build salió de consola), así que se pone en la rama de Windows.
 
 ### 5. El estilo de controles por defecto de Windows
 

@@ -8,8 +8,9 @@ set(GUITA_PROTO_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/guita/channel/v1/channel.proto)
 
 find_package(protobuf REQUIRED CONFIG)
-# The WebAssembly build of protobuf has no protoc: the host's generates the code
-if(EMSCRIPTEN)
+# The WebAssembly and Windows builds of protobuf have no protoc: in a cross build the
+# host's generates the code
+if(CMAKE_CROSSCOMPILING)
     find_program(GUITA_PROTOC_EXECUTABLE protoc
         HINTS ${GUITA_HOST_PROTOBUF_DIR}/bin
         NO_CMAKE_FIND_ROOT_PATH

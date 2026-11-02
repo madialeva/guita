@@ -76,5 +76,12 @@ First version: a proof of concept of the architecture, to be released as 0.1.0.
   linked in, which runs on other Linux machines with glibc 2.34 or later and an
   X11 desktop without installing Qt. Its static dependencies, Qt 6.12 and libpq,
   come from toolchain-cpp.
+- Self-contained client for 64-bit Windows 10 or later, cross-built on Linux on
+  demand with `scripts/build-windows.sh` (`windows` preset): a single
+  `client.exe` with Qt, the embedded backend, libpq with TLS and the C++ runtime
+  linked in, which needs only DLLs of Windows and runs without installing
+  anything, in both modes, also through `wss://`. The script checks every DLL it
+  imports against a list of Windows DLLs. The cross compiler, Qt and the
+  libraries for Windows come from toolchain-cpp.
 - `scripts/check-version.sh <branch>` checks the project version against a
   `develop/vX.Y.Z` or `release/vX.Y.Z` branch.

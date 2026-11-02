@@ -51,7 +51,7 @@ Proof of concept (v0.1.0). See [CHANGELOG.md](CHANGELOG.md) for what each versio
 | ✅ | Native desktop client connected to a remote backend |
 | ✅ | Standalone desktop mode with the backend embedded in the client |
 | ✅ | Self-contained desktop executable, with Qt linked in (built on demand) |
-| ⬜ | Self-contained Windows executable, cross-built on Linux |
+| ✅ | Self-contained Windows executable, cross-built on Linux (built on demand) |
 | ✅ | English and Spanish user interface |
 | ⬜ | Embedded PostgreSQL for standalone mode |
 | ⬜ | User authentication |
@@ -101,6 +101,7 @@ guita takes its toolchain from [toolchain-cpp](https://github.com/madialeva/tool
 | `libpqxx`, `cpp-httplib`, `protobuf`, `buf` | libpqxx 8.0, cpp-httplib 0.61, protobuf 36.2 (with `protoc`), buf 1.74 | backend, the contract, its checks |
 | `qt-wasm`, `protobuf-wasm` | Qt 6.12 WebAssembly kit, emsdk 5.0.5, protobuf for WebAssembly | web client |
 | `qt-static`, `libpq-static` | static Qt 6.12 and libpq 18.6 | self-contained desktop client |
+| `qt-mingw`, `libpq-mingw`, `libpqxx-mingw`, `cpp-httplib-mingw`, `protobuf-mingw` | the GCC 16.2 cross compiler, Qt 6.12 and the libraries for 64-bit Windows | Windows client |
 
 Besides them: CMake 3.25+ and Ninja, and the development files of libpq and
 zlib.
@@ -188,8 +189,16 @@ packages they need are in toolchain-cpp's documentation):
 scripts/build-static.sh                            # build/dist/client, checked to need only system libraries
 ```
 
-Its Windows version will be cross-built on Linux, with toolchain-cpp's GCC 16.2
-cross compiler for 64-bit Windows (`../toolchain-cpp/install.sh gcc-mingw`).
+Its Windows version, a single `client.exe` for 64-bit Windows 10 or later, is
+cross-built on Linux, also on demand, with toolchain-cpp's GCC 16.2 cross
+compiler and its components for Windows (about half an hour once, mostly Qt):
+
+```sh
+../toolchain-cpp/install.sh qt-mingw libpq-mingw libpqxx-mingw cpp-httplib-mingw protobuf-mingw
+scripts/build-windows.sh                           # build/dist/client.exe, checked to import only Windows DLLs
+```
+
+Copy `client.exe` to a Windows machine and run it: it needs nothing else.
 
 ## Running
 

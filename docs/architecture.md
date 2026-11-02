@@ -664,7 +664,9 @@ this section describes what guita uses and requires of it.
 | buf | 1.74.0 | `buf` |
 | Qt, static, only for the self-contained client (§9.2) | 6.12.0 | `qt-static` (one kit for every project, X11 only) |
 | libpq, static, only for the self-contained client (§9.2) | 18.6 | `libpq-static` (client part only) |
-| GCC cross compiler for 64-bit Windows, only for building for Windows | 16.2.0 | `gcc-mingw` |
+| GCC cross compiler for 64-bit Windows, only for the Windows client (§9.2) | 16.2.0 | `gcc-mingw` (with its CMake toolchain file) |
+| Qt for Windows, static, only for the Windows client | 6.12.0 | `qt-mingw` (one kit for every project, Schannel TLS) |
+| OpenSSL, libpq, libpqxx, cpp-httplib, protobuf for Windows, only for the Windows client | 3.5.9, 18.6, 8.0.2, 0.61.0, 36.2 | `openssl-mingw`, `libpq-mingw`, `libpqxx-mingw`, `cpp-httplib-mingw`, `protobuf-mingw` (static, C++26) |
 | CMake | 3.25+ | system |
 | libpq, zlib | system | system development packages |
 | PostgreSQL | 17 tested | system |
@@ -681,7 +683,9 @@ this section describes what guita uses and requires of it.
 - **Which components.** `gcc qt libpqxx cpp-httplib protobuf buf` for the
   server, the desktop client, the tests and the measurements (also in the CI,
   §10.4); `qt-wasm protobuf-wasm` for the web client; `qt-static libpq-static`
-  for the self-contained client.
+  for the self-contained client; `qt-mingw libpq-mingw libpqxx-mingw
+  cpp-httplib-mingw protobuf-mingw` (which bring `gcc-mingw` and
+  `openssl-mingw`) for the Windows client.
 - **The pinned version.** guita pins toolchain-cpp's version in the CI
   (`TOOLCHAIN_CPP_REF`) and in its documentation. A new version changes them
   together, with the presets' prefixes if they change (a MAJOR version of
@@ -744,11 +748,24 @@ this section describes what guita uses and requires of it.
   release of the test server, and speaks the same protocol to PostgreSQL 17. A
   Qt module the client needs is added to the `qt-static` component, in a change
   of toolchain-cpp.
-- **The cross compiler for Windows** (`gcc-mingw`) is the base of the
-  self-contained Windows client (#29): GCC 16.2.0 for `x86_64-w64-mingw32`,
-  whose executables carry the C++ runtime inside and need only DLLs of
-  Windows 10 or later. On Windows, `std::print` needs `-lstdc++exp`
-  (toolchain-cpp's `docs/toolchain.md`).
+- **The components for Windows** of the Windows client (§9.2) are installed
+  on demand, never by the CI:
+  - `gcc-mingw`, GCC 16.2.0 for `x86_64-w64-mingw32`, whose executables carry
+    the C++ runtime inside and need only DLLs of Windows 10 or later. Its
+    `toolchain.cmake` names the compiler relative to itself and searches only
+    the roots it is given. It carries a patch of libstdc++'s headers for GCC
+    bug 125151: without it, C++26 code that copies or throws
+    `std::runtime_error` and its kin, as the backend does with
+    `std::invalid_argument`, does not link for Windows. On Windows,
+    `std::print` needs `-lstdc++exp`;
+  - `qt-mingw`, a static Qt 6.12 for Windows with the modules of `qt-static`
+    (the Linguist tools come from the host), Windows' own TLS (Schannel) and
+    Direct3D 11 and 12 and desktop OpenGL; its host (`QT_HOST_PATH`) is the
+    desktop kit, which therefore carries qtshadertools;
+  - static OpenSSL 3.5 LTS and libpq 18.6 with it, and libpqxx, cpp-httplib
+    (without zlib) and protobuf with abseil (without `protoc`), all in C++26.
+
+  How each is built is in toolchain-cpp's `docs/toolchain.md`.
 - Presets: `native` (Debug, `build/native`) and `wasm` (Release, `build/wasm`).
   `scripts/build-wasm.sh` also copies the web files to `build/web`, the docroot
   used by `scripts/run-server.sh`. The `static` preset (Release,
@@ -760,6 +777,16 @@ this section describes what guita uses and requires of it.
   `libgcc` statically without a run path, `PostgreSQL::PostgreSQL` gets the
   libraries `libpq.a` needs (`pgcommon_shlib`, `pgport_shlib`, OpenSSL), and
   `qt_import_plugins` fixes the Qt plugins linked into the client.
+- The `windows` preset (Release, `build/windows`, only the `client` target, no
+  tests) cross-builds the Windows client of §9.2: its toolchain file is
+  `qt-mingw`'s `qt.toolchain.cmake`, which chain-loads `gcc-mingw`'s;
+  `QT_HOST_PATH` is the desktop kit; the `-mingw` prefixes go to
+  `CMAKE_PREFIX_PATH` and `CMAKE_FIND_ROOT_PATH`, and the native `protoc`
+  generates the contract (`GUITA_HOST_PROTOBUF_DIR`, used in any cross build).
+  Under `GUITA_STATIC` for Windows, OpenSSL is static and libpq also links
+  `ws2_32`, `secur32` and `crypt32`; the server (POSIX threads and signals) is
+  not defined; and the client is a GUI executable (`WIN32_EXECUTABLE`) with the
+  Windows platform plugin and the Schannel TLS backend.
 
 ## 9. Deployment
 
@@ -867,6 +894,34 @@ client. Neither the native build, the tests nor the CI need it.
   - `libopengl0`, `libglx0` and `libegl1` (libglvnd), with an OpenGL driver:
     `libglx-mesa0` and `libgl1-mesa-dri` on a machine without a GPU;
   - a font, such as `fonts-dejavu-core`.
+
+**The client for Windows.** `scripts/build-windows.sh` cross-builds on demand,
+on Linux, with the `windows` preset (§8), a single `build/dist/client.exe` for
+64-bit Windows 10 (1809) or later, 54 MB without symbols, that runs without
+installing anything and with nothing beside it. It takes the same options and
+variables as the native client; `API_URL` with `https://` connects through
+`wss://`. Neither the native build, the tests nor the CI need it.
+
+- **Linked into it:** Qt 6.12 for Windows (`qt-mingw`) with the Windows
+  platform plugin and the Schannel TLS backend, and the QML modules the views
+  import; the backend, libpq 18.6 with a static OpenSSL 3.5 for TLS to
+  PostgreSQL, libpqxx, protobuf and abseil; and GCC's runtime (`libstdc++`,
+  `libgcc`, winpthreads). The Qt Quick Controls style is Windows' default.
+- **What it needs:** only DLLs of Windows, all of them in `System32` since
+  Windows 10 1809: the kernel and user interface, Direct3D 9, 11 and 12, DXGI,
+  DirectWrite and OpenGL, Winsock and WinHTTP, SSPI, the certificate store and
+  CNG, a few WinRT API sets, and the Universal C Runtime. It is a GUI
+  executable: it opens no console. Standalone mode still needs a reachable
+  PostgreSQL server.
+- **How it is checked:** `scripts/build-windows.sh` lists the DLLs the
+  executable imports (the cross `objdump -p`) and fails, naming them, on any
+  that is not in its list of DLLs of Windows, each with the first Windows that
+  has it according to Microsoft's documentation; a DLL the client starts to
+  import is reviewed and added. A list of allowed DLLs, unlike the Linux
+  check: there is no `ldd` to resolve where a DLL would come from.
+  `scripts/build-windows.sh --check <executable>` runs only that check. It
+  also fails before configuring if a component for Windows is missing, with
+  the toolchain-cpp command that installs it.
 
 ## 10. Testing
 
@@ -1035,7 +1090,12 @@ created after the first run, and the job keeps its name.
     scripts that build it cover; a distributed copy still ships the LGPL text
     and Qt's notices (the static Qt installs its SBOM in
     `Qt/6.12.0-static/sbom` under toolchain-cpp's `software/`) and offers Qt's
-    source code.
+    source code. The same holds for the Windows client (`Qt/6.12.0-mingw/sbom`).
+    That one also carries a static OpenSSL 3.5 (Apache 2.0), whose notice a
+    distributed copy ships, and the runtime of mingw-w64: winpthreads (MIT,
+    which asks for its notice) and its CRT start-up code (public domain or
+    permissive); libgcc and libstdc++ come under the GCC Runtime Library
+    Exception, which asks nothing of the executable.
   - **Web**: `client.wasm` links Qt statically, and serving it to browsers is
     distribution. The LGPL then requires letting users relink the client with
     a modified Qt (for example by publishing the client's sources or object
