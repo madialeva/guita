@@ -44,6 +44,6 @@ Con Wine en el Xvfb `:99`, un prefijo temporal sin el perfil sRGB y `build/dist/
 
 ## 4. Verificación final
 
-- [ ] 4.1 El usuario copia solo `build/dist/client.exe` a un Windows 10 u 11 de 64 bits, y prueba los dos modos y `wss://` contra el HAProxy de la tarea 3.4, con el certificado importado con `certutil -user -addstore Root`.
-- [ ] 4.2 El usuario hace push de la rama y el CI pasa, ya con toolchain-cpp v0.2.0.
-- [ ] 4.3 El usuario revisa el cambio, incluida la verificación visual, y da el visto bueno.
+- [x] 4.1 El usuario copia solo `build/dist/client.exe` a un Windows 10 u 11 de 64 bits, y prueba los dos modos y `wss://` contra el HAProxy de la tarea 3.4, con el certificado importado con `certutil -user -addstore Root`.
+- [x] 4.2 El usuario hace push de la rama y el CI pasa, ya con toolchain-cpp v0.2.0.
+- [x] 4.3 El usuario revisa el cambio, incluida la verificación visual, y da el visto bueno.
